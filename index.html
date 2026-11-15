@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X5 F15 Rear Air Suspension</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: one column. Live 3D model first, controls under it, short text sections after.
+     Single theme by choice: a workshop at night, car paint in dark blue. */
+  --bg:#0b1322;
+  --panel:#121d33;
+  --rule:#27364f;
+  --ink:#e7edf6;
+  --muted:#94a3bd;
+  --air:#f0b84a;      /* air under pressure */
+  --signal:#69cfe6;   /* electrical signals */
+  --fault:#ff6a4d;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55}
+main{max-width:860px;margin:0 auto;padding:20px 16px 56px;display:flex;flex-direction:column;gap:28px}
+header{display:flex;flex-direction:column;gap:4px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--signal)}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(38px,9vw,60px);line-height:.95;margin:0;letter-spacing:.01em;text-transform:uppercase;text-wrap:balance}
+h2{font-family:var(--display);font-weight:600;font-size:28px;line-height:1.05;margin:0 0 8px;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:22px;margin:0;text-transform:uppercase;letter-spacing:.02em}
+p{margin:0 0 10px;max-width:65ch}
+p:last-child{margin-bottom:0}
+.lede{color:var(--muted);margin-top:6px}
+strong{font-weight:600;color:#fff}
+a{color:var(--signal)}
+kbd{font-family:var(--mono);font-size:13px;border:1px solid var(--rule);border-radius:4px;padding:1px 6px;color:var(--ink)}
+
+/* 3D stage */
+.rig{background:var(--panel);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.stage{position:relative;aspect-ratio:1/1;background:var(--bg)}
+@media (min-width:640px){.stage{aspect-ratio:16/10}}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.stage canvas:active{cursor:grabbing}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--muted);background:var(--bg);text-align:center;padding:16px}
+.tag{position:absolute;left:0;top:0;transform:translate(-50%,-140%);pointer-events:none;font-family:var(--mono);font-size:12px;white-space:nowrap;color:#0b1322;background:var(--ink);padding:3px 8px;border-radius:4px;display:none}
+.tag::after{content:"";position:absolute;left:50%;bottom:-5px;width:1px;height:14px;background:var(--ink)}
+.view{position:absolute;left:10px;right:10px;bottom:10px;display:flex;flex-wrap:wrap;gap:8px}
+.view{gap:6px}.view button{background:rgba(11,19,34,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:6px;min-height:36px;padding:8px 10px;font-size:13px}
+.view button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.slow{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:11px;color:#0b1322;background:var(--air);padding:2px 7px;border-radius:3px;display:none;pointer-events:none}
+.bar{position:absolute;left:0;top:0;pointer-events:none;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--air);background:rgba(11,19,34,.8);border:1px solid var(--air);padding:1px 6px;border-radius:3px;white-space:nowrap;display:none;font-variant-numeric:tabular-nums}
+.chart{border-top:1px solid var(--rule);padding:8px 10px 6px}
+.chart canvas{display:block;width:100%;height:130px}
+.chart .cap{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.chart .cap i{font-style:normal;font-family:var(--mono);text-transform:none;letter-spacing:0}
+.chart .cap .l{color:var(--air)} .chart .cap .rt{color:var(--signal)}
+.drag{position:absolute;top:10px;right:12px;font-family:var(--mono);font-size:11px;color:var(--muted);pointer-events:none}
+.status{font-family:var(--mono);font-size:13px;line-height:1.45;padding:10px 14px;border-top:1px solid var(--rule);min-height:58px;color:var(--ink)}
+.status.bad{color:var(--fault)}
+.read{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--rule)}
+.read div{padding:8px 10px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);min-width:0}
+.read div:nth-child(3n){border-right:0}
+.read div:nth-last-child(-n+3){border-bottom:0}
+.read span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.read b{font-family:var(--mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.read b.air{color:var(--air)} .read b.bad{color:var(--fault)}
+
+/* controls */
+.controls{display:flex;flex-direction:column;gap:16px}
+.group{display:flex;flex-direction:column;gap:8px}
+.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;justify-content:space-between;gap:12px}
+.label output{font-family:var(--mono);color:var(--ink);text-transform:none;letter-spacing:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+button{font:500 14px/1 var(--body);color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:999px;padding:10px 14px;cursor:pointer;min-height:40px}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.faults button[aria-pressed="true"]{background:var(--fault);border-color:var(--fault);color:#1a0b06}
+.faults button[data-fault="none"][aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+button.act{border-radius:6px;border-color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--air);height:32px;margin:0}
+.hint{font-size:14px;color:var(--muted);min-height:44px;margin:0}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--air);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.card dl{margin:0;display:flex;flex-direction:column;gap:10px}
+.card dt{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.card dd{margin:2px 0 0;max-width:65ch}
+
+.sym{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sym div{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule)}
+.sym div>span:first-child{color:#fff;font-weight:500}
+.sym div>span:last-child{color:var(--muted)}
+@media (max-width:440px){.sym div{grid-template-columns:1fr;gap:4px}}
+ol,ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;max-width:65ch}
+.keys{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.note{font-size:14px;color:var(--muted);border-top:1px solid var(--rule);padding-top:16px}
+
+/* phone and narrow windows: one column that scrolls */
+.left,.side,.panel{display:flex;flex-direction:column;gap:28px;min-width:0}
+.tabs{display:none}
+
+/* laptop: one screen, no page scroll. Model on the left, tabs on the right. */
+@media (min-width:900px) and (min-height:480px){
+  html,body{height:100%;overflow:hidden}
+  main{max-width:none;height:100%;padding:12px 16px;display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:16px}
+  .left{min-height:0;gap:8px}
+  header{flex-direction:row;align-items:baseline;gap:14px}
+  header h1{font-size:32px;order:-1;white-space:nowrap}
+  .lede{display:none}
+  .rig{flex:1;min-height:0;display:flex;flex-direction:column}
+  .stage{flex:1;min-height:0;aspect-ratio:auto}
+  .status{height:52px;min-height:0;padding:7px 14px;overflow:hidden}
+  .chart{padding:6px 10px 4px}
+  .chart canvas{height:82px}
+  .read{grid-template-columns:repeat(6,1fr)}
+  .read div:nth-child(n){border-bottom:0;border-right:1px solid var(--rule);padding:6px 10px}
+  .read div:nth-child(6){border-right:0}
+  .side{min-height:0;gap:10px}
+  .tabs{display:flex;gap:6px}
+  .tabs button{flex:1;border-radius:6px}
+  .side .panel{display:none;flex:1;min-height:0;overflow-y:auto;gap:20px;padding-right:2px}
+  .side[data-tab="drive"] .panel[data-p="drive"],.side[data-tab="parts"] .panel[data-p="parts"],.side[data-tab="guide"] .panel[data-p="guide"]{display:flex}
+  .controls{gap:11px}
+  .side button{min-height:32px;padding:7px 11px;font-size:13px}
+  .side .chips{gap:6px}
+  .hint{font-size:13px;line-height:1.4;min-height:55px}
+  input[type=range]{height:24px}
+  .side h2{font-size:22px}
+  .panel[data-p="parts"] h2{display:none}
+  .card{padding:12px 14px;gap:8px}
+  .card dd{font-size:14px;line-height:1.45}
+  .panel[data-p="guide"]{font-size:14px}
+}
+</style>
+</head>
+<body>
+<main>
+<div class="left">
+<header>
+  <div class="eyebrow">BMW X5 F15 · 2014 · sDrive · rear axle</div>
+  <h1>Rear air suspension</h1>
+  <p class="lede">Turn the car with your finger. Drive it on a road, add load, or set a fault. See how the pressure in each air spring changes. Tap a part to read about it.</p>
+</header>
+
+<section class="rig" aria-label="Live 3D model of the rear air suspension">
+  <div class="stage" id="stage">
+    <canvas id="gl" aria-label="3D model of the rear of the car with the air suspension parts"></canvas>
+    <div class="tag" id="tag"></div>
+    <div class="bar" id="barL"></div><div class="bar" id="barR"></div>
+    <div class="slow" id="slow">slow motion</div>
+    <div class="drag" id="drag">drag to turn · pinch to zoom</div>
+    <div class="view">
+      <button type="button" id="bExplode" aria-pressed="false">Take apart</button>
+      <button type="button" id="bBody">X-ray</button>
+      <button type="button" id="bUnder">Below</button>
+      <button type="button" id="bView">Home view</button>
+    </div>
+    <div class="loading" id="loading">Filling the springs…</div>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+  <div class="chart">
+    <div class="cap"><span>Spring pressure, last 1.6 s</span><span><i class="l" id="cL">L 7.0</i> · <i class="rt" id="cR">R 7.0</i> bar</span></div>
+    <canvas id="chart" aria-label="Graph of the pressure in the left and right air spring"></canvas>
+  </div>
+  <div class="read">
+    <div><span>Height left</span><b id="rHL"></b></div>
+    <div><span>Height right</span><b id="rHR"></b></div>
+    <div><span>Compressor</span><b id="rC"></b></div>
+    <div><span>Air left</span><b id="rPL" class="air"></b></div>
+    <div><span>Air right</span><b id="rPR" class="air"></b></div>
+    <div><span>Speed</span><b id="rS"></b></div>
+  </div>
+</section>
+
+</div>
+<div class="side" id="side" data-tab="drive">
+<div class="tabs" id="tabs"><button type="button" data-tab="drive" aria-pressed="true">Drive and faults</button><button type="button" data-tab="parts" aria-pressed="false">Parts</button><button type="button" data-tab="guide" aria-pressed="false">Guide</button></div>
+<div class="panel" data-p="drive">
+<section class="controls" aria-label="Controls">
+  <div class="group">
+    <div class="label">Road</div>
+    <div class="chips" id="drive">
+      <button type="button" data-drive="park" aria-pressed="true">Parked</button>
+      <button type="button" data-drive="smooth" aria-pressed="false">Smooth road</button>
+      <button type="button" data-drive="pothole" aria-pressed="false">Pothole, left wheel</button>
+      <button type="button" data-drive="bump" aria-pressed="false">Bump, left wheel</button>
+      <button type="button" data-drive="speed" aria-pressed="false">Speed bump, two wheels</button>
+    </div>
+    <p class="hint" id="dhint"></p>
+  </div>
+  <div class="group">
+    <label class="label" for="load">Load in the luggage compartment <output id="loadOut" for="load">0 kg</output></label>
+    <input type="range" id="load" min="0" max="400" step="10" value="0">
+  </div>
+  <div class="group">
+    <div class="label">Fault</div>
+    <div class="chips faults" id="faults">
+      <button type="button" data-fault="none" aria-pressed="true">No fault</button>
+      <button type="button" data-fault="leakL" aria-pressed="false">Left spring leaks</button>
+      <button type="button" data-fault="leakR" aria-pressed="false">Right spring leaks</button>
+      <button type="button" data-fault="weak" aria-pressed="false">Compressor is weak</button>
+      <button type="button" data-fault="relay" aria-pressed="false">Relay does not close</button>
+      <button type="button" data-fault="sensorL" aria-pressed="false">Left sensor is wrong</button>
+    </div>
+    <p class="hint" id="hint"></p>
+  </div>
+  <div class="chips">
+    <button type="button" class="act" id="engine" aria-pressed="true">Engine: on</button>
+    <button type="button" class="act" id="park">Park for 8 hours</button>
+    <button type="button" class="act" id="reset">Reset</button>
+    <button type="button" class="act" id="bSlow" aria-pressed="true">Slow motion</button>
+  </div>
+</section>
+
+</div>
+<div class="panel" data-p="parts">
+<section aria-label="Parts">
+  <h2>The parts</h2>
+  <div class="group">
+    <div class="chips" id="parts"></div>
+    <div class="card" id="card" aria-live="polite"></div>
+  </div>
+</section>
+
+</div>
+<div class="panel" data-p="guide">
+<section>
+  <h2>What the system does</h2>
+  <p>Two <strong>air springs</strong> hold up the rear of the car. They replace the steel coil springs. The front axle keeps its steel springs.</p>
+  <p>A <strong>height sensor</strong> on each side measures the distance between the body and the axle. The <strong>control unit</strong> compares the height with a target. If the body is too low, the control unit starts the <strong>compressor</strong> and opens a valve. Air goes into the spring and the body goes up. If the body is too high, the control unit releases air.</p>
+  <p>When the height is correct, all valves are closed. The air stays in the springs. A good system holds its height for many days with the engine off.</p>
+</section>
+
+<section>
+  <h2>What happens on the road</h2>
+  <p>During driving the valves are closed. No air goes in or out of the springs. But the pressure changes all the time, because the <strong>volume</strong> of each spring changes.</p>
+  <ul>
+    <li><strong>Bump:</strong> the wheel goes up, the spring gets shorter, and the same air has less space. The pressure goes up and pushes the wheel down again.</li>
+    <li><strong>Pothole:</strong> the wheel goes down, the spring gets longer, and the pressure goes down. Then the wheel hits the far edge of the hole and the pressure goes up sharply.</li>
+    <li><strong>One wheel:</strong> the spring on the other side changes only a little. The body turns a small quantity around its length axis.</li>
+    <li><strong>Speed bump:</strong> the two springs get shorter at the same time. The body goes up and comes down again. The shock absorbers stop this movement after one or two cycles.</li>
+  </ul>
+  <p>Add load and do the test again. The pressure in the springs is higher, and the pressure changes are larger.</p>
+</section>
+
+<section>
+  <h2>Three tests in the model</h2>
+  <ol>
+    <li>Move the load to 400 kg. The body goes down. Then the compressor lifts it to the target.</li>
+    <li>Select <strong>Left spring leaks</strong>. Look at the compressor. It starts again and again. Then tap <strong>Park for 8 hours</strong> and start the engine.</li>
+    <li>Select <strong>Left sensor is wrong</strong>. The car leans, but there is no leak. The control unit thinks that the height is correct.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>From symptom to part</h2>
+  <div class="sym">
+    <div><span>One side is low after a night. It goes up after you start the engine.</span><span>The air spring on that side leaks, or its air line connection leaks.</span></div>
+    <div><span>Both sides are low after a night.</span><span>Two old springs, or a leak at the valve block.</span></div>
+    <div><span>The rear stays low. You do not hear the compressor.</span><span>Fuse, relay, compressor motor, or wiring.</span></div>
+    <div><span>The compressor runs for a long time. The car goes up slowly or not at all.</span><span>A weak compressor, or a large leak.</span></div>
+    <div><span>You hear the compressor frequently while you drive.</span><span>A small leak. Repair it before the compressor wears out.</span></div>
+    <div><span>The car leans, but it holds the same position for days.</span><span>A height sensor or its link rod.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Before you work on the car</h2>
+  <ul>
+    <li>Do not open an air line when there is pressure in the system. Release the pressure with a BMW diagnostic tool first.</li>
+    <li>Put the body on stands. Do not let the air springs hold the car while you work below it.</li>
+    <li>Find leaks with water and soap. Bubbles show the leak.</li>
+    <li>Repair the leak before you replace a compressor. A leak makes a new compressor wear out quickly.</li>
+    <li>When you replace the compressor, replace the relay also.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Keys</h2>
+  <ul class="keys">
+    <li><kbd>E</kbd> take apart or assemble</li>
+    <li><kbd>B</kbd> body: x-ray, paint, or off</li>
+    <li><kbd>U</kbd> look from below</li>
+    <li><kbd>V</kbd> home view</li>
+    <li><kbd>P</kbd> park for 8 hours</li>
+    <li><kbd>S</kbd> engine on or off</li>
+    <li><kbd>0</kbd> to <kbd>5</kbd> select a fault</li>
+    <li><kbd>Q</kbd> <kbd>W</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> select the road</li>
+  </ul>
+</section>
+
+<p class="note">This is a simplified model. The pressures, times, and heights are examples and are not BMW data. The body is a simple dark blue SUV shape with the approximate dimensions of the F15. It is not a copy of the BMW design and it has no BMW marks. The shapes and positions of the parts are schematic. Use the repair data for your VIN before you buy parts. Source for the fault list and the checks: <a href="https://ssfautoparts.com/flipbooks/autofocus/2023.Q2/inc/html/10.html">SSF Autofocus, F15/F16 suspension</a>.</p>
+</div>
+</div>
+</main>
+
+<script src="three.min.js"></script>
+<script src="OrbitControls.js"></script>
+<script src="RoomEnvironment.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+var PARTS={
+  spring:{name:"Air spring",job:"A rubber bellows that is full of compressed air. It carries the weight of the rear of the car. There is one on each side, between the control arm and the body. On this car the air spring and the shock absorber are separate parts.",fail:"The rubber gets small cracks with age, most frequently at the fold where the bellows rolls. Air goes out slowly. This is the most common fault of this system.",check:"Park the car for a night. If one side is low in the morning, that spring is the first suspect. Put water and soap on the bellows and the line connection. Look for bubbles."},
+  unit:{name:"Air supply unit",job:"An electric motor that drives a small piston compressor. An air dryer removes water from the air. The unit is below the luggage compartment floor. It runs only when the control unit asks for air.",fail:"The piston seal wears, and the compressor makes less pressure. The usual cause is a leak that made the compressor run too much.",check:"Let the control unit ask for air. If the motor runs but the car goes up slowly, the compressor is weak or there is a large leak. If the motor does not run, examine the fuse and the relay first."},
+  valve:{name:"Valve block",job:"Two solenoid valves, one for each spring. An open valve connects the spring to the compressor or to the exhaust. A closed valve keeps the air in the spring.",fail:"The seal rings become hard and leak. Water can damage the solenoids.",check:"If both sides go down at the same time and the springs are good, examine the valve block and its connections with water and soap."},
+  lines:{name:"Air lines",job:"Thin plastic tubes that connect the valve block to each spring.",fail:"A connection leaks, or a line rubs on another part and gets a hole.",check:"Put water and soap on each connection while the compressor runs."},
+  sensor:{name:"Height sensor",job:"A small sensor on each side, attached to the rear axle carrier. A link rod connects its lever to the control arm. When the body moves up or down, the lever turns and the signal changes.",fail:"The link rod breaks or its joint seizes. The sensor can also give a wrong signal.",check:"If the car leans but holds its position for days, there is no leak. Examine the sensor and the link rod. A diagnostic tool shows the height value of each side."},
+  ehc:{name:"Control unit (EHC)",job:"EHC is the electronic height control. The control unit reads the two height sensors. It switches the compressor relay and the valves. It stops the compressor if the compressor runs for too long.",fail:"The unit does not fail frequently. It stores fault codes when a different part fails.",check:"Read the fault memory with a BMW diagnostic tool before you replace parts."},
+  relay:{name:"Compressor relay",job:"The compressor motor uses a large current. The control unit sends a small signal to the relay, and the relay switches the large current.",fail:"The contacts burn. Water in the luggage compartment can damage the relay.",check:"When the control unit asks for air, the relay must click and give voltage to the compressor. If there is a signal but no voltage out, replace the relay."},
+  fuse:{name:"Fuse",job:"It protects the compressor circuit. It is in the fuse box in the luggage compartment.",fail:"A compressor that is worn or blocked uses too much current, and the fuse blows.",check:"Find the fuse number on the fuse card in your car. If a new fuse blows again, examine the compressor."},
+  damper:{name:"Shock absorber",job:"It controls how fast the body moves up and down. It does not carry the weight and it is not a part of the air system.",fail:"Oil leaks out, and the car moves up and down too much after a bump.",check:"Look for oil on the tube. A bad shock absorber does not make the car low."},
+  arm:{name:"Control arm",job:"It connects the wheel carrier to the rear axle carrier. The air spring sits on it. The link rod of the height sensor is attached to it.",fail:"The rubber bushings wear and make noise.",check:"This part does not cause loss of height."}
+};
+var ORDER=["spring","unit","valve","lines","sensor","ehc","relay","fuse","damper","arm"];
+var FAULTS=["none","leakL","leakR","weak","relay","sensorL"];
+var HINTS={
+  none:"All parts are good. Add load to see the system work.",
+  leakL:"Air goes out of the left spring. The compressor replaces it while the engine runs. Park the car to see the result of a night.",
+  leakR:"Air goes out of the right spring. The compressor replaces it while the engine runs. Park the car to see the result of a night.",
+  weak:"Add load. The compressor runs, but the car goes up too slowly. Then the control unit stops the compressor.",
+  relay:"Add load. The control unit asks for air, but the compressor gets no current.",
+  sensorL:"The left sensor reads 30 mm too high. The control unit releases air on the left to correct a fault that is not there."
+};
+
+/* ---------- simulation ---------- */
+var S={drive:"park",slow:true,body:0,mL:1,mR:1,load:0,engine:true,fault:"none",stL:"hold",stR:"hold",run:0,lock:false,starts:0,wasOn:false,park:0,parked:false,t:0,sel:"spring",explode:false,k:0};
+var FILL=0.12, WEAK=0.015, LEAK=0.02, LIMIT=12, PARK=2.5;
+var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function clamp(v,a,b){return v<a?a:v>b?b:v}
+function off(m,W){return clamp((m/W-1)*220,-60,40)}
+function pres(m,W){var o=(m/W-1)*220;return o>-60?7*W:Math.max(1,m*9.6)}
+function next(st,s){
+  if(st==="hold"){if(s<-10)return"up";if(s>10)return"down";return"hold"}
+  if(st==="up")return s>=0?"hold":"up";
+  return s<=0?"hold":"down";
+}
+var OB={pothole:{h:-0.07,L:0.6},bump:{h:0.05,L:0.5},speed:{h:0.07,L:0.9,both:true}};
+var KMH={park:0,smooth:50,pothole:40,bump:40,speed:20};
+var DHINT={
+  park:"The car does not move. Use the load and the faults below.",
+  smooth:"50 km/h. The springs move only a few millimetres. The pressure stays almost constant.",
+  pothole:"40 km/h. The left wheels fall into a hole. The left spring gets longer and its pressure goes down. Then the wheel hits the far edge and the pressure goes up sharply.",
+  bump:"40 km/h. A bump pushes the left wheels up. The left spring gets shorter and its pressure goes up. The right spring changes only a little.",
+  speed:"20 km/h. The two rear wheels go up together. The pressure goes up in the two springs. Then the body moves up and down one or two times."
+};
+function Q(){return{zb:0,vb:0,zw:0,vw:0,p:7,a:0,x:0,off:0}}
+var DY={L:Q(),R:Q(),fL:0,fR:0,dist:0,v:0,zo:13,ts:1,spin:0};
+function road(sd,zw){
+  var y=0;
+  if(DY.v>0.5){var d=DY.dist+zw; y+=0.0022*Math.sin(d*2.3+sd)+0.0013*Math.sin(d*6.1+sd*2)}
+  var ob=OB[S.drive]; if(ob&&(ob.both||sd===1)){var u=zw-DY.zo; if(Math.abs(u)<ob.L/2){var c=Math.cos(Math.PI*u/ob.L); y+=ob.h*c*c}}
+  return y;
+}
+function accel(q,sd,m,W){
+  var offS=clamp((m/W-1)*220,-200,60), x=(q.zb-q.zw)*1000;
+  var p=7*W*Math.pow((220+offS)/Math.max(220+x,15),1.3);
+  var Fs=9.81*(p/(7*W)-1); if(x<-60)Fs+=9.81*(-60-x)/6; if(x>70)Fs-=9.81*(x-70)/6;
+  var d=5.3*(q.vb-q.vw);
+  var defl=road(sd,0)-q.zw+0.018;
+  q.a=Fs-d; q.aw=(-Fs+d)/0.13+4761*Math.max(defl,0)-4761*0.018; q.p=Math.max(1,p); q.x=x; q.off=offS;
+}
+function dynamics(dts,W){
+  var n=Math.max(1,Math.ceil(dts/0.001)), h=dts/n, L=DY.L, R=DY.R;
+  for(var i=0;i<n;i++){
+    accel(L,1,S.mL,W); accel(R,-1,S.mR,W);
+    var aL=0.82*L.a+0.18*R.a, aR=0.82*R.a+0.18*L.a;
+    L.vb+=aL*h; R.vb+=aR*h; L.vw+=L.aw*h; R.vw+=R.aw*h;
+    L.zb+=L.vb*h; R.zb+=R.vb*h; L.zw+=L.vw*h; R.zw+=R.vw*h;
+    DY.dist+=DY.v*h; if(OB[S.drive])DY.zo-=DY.v*h;
+    bufT+=h; if(bufT>=0.004){bufT-=0.004; BUF.push([L.p,R.p]); if(BUF.length>400)BUF.shift()}
+  }
+  [L,R].forEach(function(q){if(!isFinite(q.zb+q.zw+q.vb+q.vw)){q.zb=q.zw=q.vb=q.vw=0} q.zb=clamp(q.zb,-0.2,0.2); q.zw=clamp(q.zw,-0.2,0.2)});
+  if(DY.zo<-9)DY.zo=13;
+  DY.fL=road(1,2.93); DY.fR=road(-1,2.93); DY.spin+=DY.v*dts/0.372;
+}
+var BUF=[], bufT=0; (function(){for(var i=0;i<400;i++)BUF.push([7,7])})();
+var F={};
+function step(dtReal){
+  var ob=OB[S.drive];
+  DY.v+=(KMH[S.drive]/3.6-DY.v)*Math.min(1,dtReal*1.6);
+  if(!ob)DY.zo=13;
+  var near=ob&&S.slow&&DY.zo<3.7&&DY.zo>-4.2;
+  DY.ts+=((near?0.18:1)-DY.ts)*Math.min(1,dtReal*9);
+  var dt=dtReal*DY.ts;
+  var W=1+S.load/1100, parking=S.park>0;
+  if(parking){S.park-=dt;if(S.park<=0){S.park=0;S.parked=true}}
+  var lr=parking?1.5:LEAK;
+  if(S.fault==="leakL")S.mL=Math.max(0.12,S.mL-lr*S.mL*dt);
+  if(S.fault==="leakR")S.mR=Math.max(0.12,S.mR-lr*S.mR*dt);
+  var sL=off(S.mL,W)+(S.fault==="sensorL"?30:0), sR=off(S.mR,W);
+  var comp=false, want=false, down=false;
+  if(S.engine&&!S.lock&&!parking){
+    S.stL=next(S.stL,sL); S.stR=next(S.stR,sR);
+    var nUp=(S.stL==="up"?1:0)+(S.stR==="up"?1:0);
+    want=nUp>0; comp=want&&S.fault!=="relay";
+    if(want){S.run+=dt;if(S.run>LIMIT){S.lock=true;S.stL=S.stR="hold";want=comp=false}}else S.run=0;
+    if(comp){var r=(S.fault==="weak"?WEAK:FILL)/nUp*dt;
+      if(S.stL==="up")S.mL=Math.min(2,S.mL+r); if(S.stR==="up")S.mR=Math.min(2,S.mR+r)}
+    if(S.stL==="down"){S.mL-=0.09*dt;down=true}
+    if(S.stR==="down"){S.mR-=0.09*dt;down=true}
+  }else{S.stL=S.stR="hold";S.run=0}
+  if(comp&&!S.wasOn)S.starts++;
+  S.wasOn=comp;
+  dynamics(dt,W);
+  F={W:W,oL:DY.L.x,oR:DY.R.x,pL:DY.L.p,pR:DY.R.p,cL:DY.L.x-clamp(DY.L.off,-60,60),cR:DY.R.x-clamp(DY.R.off,-60,60),near:near,comp:comp,want:want,down:down,parking:parking,
+     upL:comp&&S.stL==="up",upR:comp&&S.stR==="up",dnL:S.stL==="down",dnR:S.stR==="down"};
+}
+function mm(o){var r=Math.round(o);return(r>0?"+":r<0?"−":"")+Math.abs(r)+" mm"}
+function statusText(f){
+  if(f.parking)return["Engine off. The car is parked. Hour "+Math.min(8,Math.round((1-S.park/PARK)*8))+" of 8.",false];
+  if(S.lock)return["Level control fault. The compressor ran too long and the control unit stopped it. Set the engine to off and on to try again.",true];
+  if(f.want&&!f.comp)return["The control unit asks for air. The relay does not close. The compressor gets no current.",true];
+  if(f.comp){var w=f.upL&&f.upR?"both springs":f.upL?"the left spring":"the right spring";
+    return["The compressor runs. Air goes to "+w+"."+(S.fault==="weak"?" The pressure increases very slowly.":""),false]}
+  if(f.down)return["The exhaust valve is open. Air goes out, and the body goes down to the target.",false];
+  if(S.drive!=="park"){
+    var k=Math.round(DY.v*3.6)+" km/h. ";
+    if(f.cL<-8&&f.cR<-8)return[k+"The two springs are shorter. The pressure is up in the two springs. The valves are closed: no air moves.",false];
+    if(f.cL<-8)return[k+"The left spring is shorter. Its pressure is up. The valves are closed: no air moves.",false];
+    if(f.cL>8&&f.cR>8)return[k+"The two springs are longer. The pressure is down in the two springs.",false];
+    if(f.cL>8)return[k+"The left spring is longer. Its pressure is down.",false];
+    if(S.fault==="sensorL"&&Math.abs(f.oL-f.oR)>8)return[k+"The car leans to the left. The control unit reads 0 mm on the left.",true];
+    return[k+"The valves are closed. The pressure is almost constant.",false];
+  }
+  if(!S.engine){
+    if(f.oL<-10||f.oR<-10)return[(S.parked?"8 hours later. ":"")+"The engine is off. The system does not correct the height. Start the engine.",false];
+    return[(S.parked?"8 hours later. The car did not lose height. ":"")+"The engine is off. The valves are closed and the air stays in the springs.",false]}
+  if(S.fault==="sensorL"&&Math.abs(f.oL-f.oR)>8)return["The control unit reads 0 mm on the left, but the left side is 30 mm low. There is no leak.",true];
+  return["The height is correct. The valves are closed and the air stays in the springs.",false];
+}
+function readouts(){
+  var f=F;
+  $("rHL").textContent=mm(f.oL); $("rHR").textContent=mm(f.oR);
+  $("rHL").className=f.oL<-15?"bad":""; $("rHR").className=f.oR<-15?"bad":"";
+  $("rPL").textContent=f.pL.toFixed(1)+" bar"; $("rPR").textContent=f.pR.toFixed(1)+" bar";
+  $("rC").textContent=S.lock?"STOPPED":f.comp?"RUNS":"off"; $("rC").className=S.lock?"bad":f.comp?"air":"";
+  $("rS").textContent=Math.round(DY.v*3.6)+" km/h";
+  $("cL").textContent="L "+f.pL.toFixed(1); $("cR").textContent="R "+f.pR.toFixed(1);
+  var msg=statusText(f), st=$("status");
+  if(st.textContent!==msg[0])st.textContent=msg[0];
+  st.classList.toggle("bad",msg[1]);
+}
+
+/* ---------- pressure graph ---------- */
+var CH={lo:6,hi:8};
+function drawChart(){
+  var c=$("chart"), w=c.clientWidth, h=c.clientHeight; if(!w)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  if(c.width!==Math.round(w*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  var lo=1e9,hi=-1e9,i; for(i=0;i<BUF.length;i++){lo=Math.min(lo,BUF[i][0],BUF[i][1]);hi=Math.max(hi,BUF[i][0],BUF[i][1])}
+  var mid=(lo+hi)/2, span=Math.max(hi-lo,1.6)*1.25; lo=mid-span/2; hi=mid+span/2;
+  CH.lo+=(lo-CH.lo)*0.12; CH.hi+=(hi-CH.hi)*0.12;
+  var L=30, R=w-4, Tp=6, B=h-6;
+  function Y(p){return B-(p-CH.lo)/(CH.hi-CH.lo)*(B-Tp)}
+  g.font="10px IBM Plex Mono, ui-monospace, monospace"; g.textBaseline="middle"; g.lineWidth=1;
+  var st=(CH.hi-CH.lo)>6?2:(CH.hi-CH.lo)>3?1:0.5;
+  for(var p=Math.ceil(CH.lo/st)*st;p<CH.hi;p+=st){g.strokeStyle="#27364f";g.beginPath();g.moveTo(L,Y(p));g.lineTo(R,Y(p));g.stroke();g.fillStyle="#94a3bd";g.fillText(p.toFixed(st<1?1:0),2,Y(p))}
+  [[1,"#69cfe6"],[0,"#f0b84a"]].forEach(function(t){
+    g.strokeStyle=t[1]; g.lineWidth=2; g.lineJoin="round"; g.beginPath();
+    for(i=0;i<BUF.length;i++){var x=L+(R-L)*i/(BUF.length-1), y=Y(BUF[i][t[0]]); if(i)g.lineTo(x,y); else g.moveTo(x,y)}
+    g.stroke(); var e=BUF[BUF.length-1][t[0]]; g.fillStyle=t[1]; g.beginPath(); g.arc(R-1,Y(e),3,0,7); g.fill();
+  });
+}
+
+/* ---------- interface ---------- */
+function select(id){
+  S.sel=id;
+  Array.prototype.forEach.call($("parts").children,function(b){b.setAttribute("aria-pressed",b.dataset.id===id?"true":"false")});
+  var p=PARTS[id], card=$("card"); card.textContent="";
+  var h=document.createElement("h3"); h.textContent=p.name; card.appendChild(h);
+  var dl=document.createElement("dl");
+  [["What it does",p.job],["How it fails",p.fail],["How to examine it",p.check]].forEach(function(r){
+    var w=document.createElement("div"), dt=document.createElement("dt"), dd=document.createElement("dd");
+    dt.textContent=r[0]; dd.textContent=r[1]; w.appendChild(dt); w.appendChild(dd); dl.appendChild(w)});
+  card.appendChild(dl);
+  $("tag").textContent=p.name;
+}
+ORDER.forEach(function(id){
+  var b=document.createElement("button"); b.type="button"; b.dataset.id=id; b.textContent=PARTS[id].name;
+  b.setAttribute("aria-pressed","false"); b.addEventListener("click",function(){select(id)}); $("parts").appendChild(b)});
+function setFault(f){
+  S.fault=f; S.lock=false; S.run=0;
+  Array.prototype.forEach.call($("faults").children,function(b){b.setAttribute("aria-pressed",b.dataset.fault===f?"true":"false")});
+  $("hint").textContent=HINTS[f];
+}
+$("faults").addEventListener("click",function(e){var b=e.target.closest("button");if(b)setFault(b.dataset.fault)});
+function setEngine(on){S.engine=on;if(on){S.lock=false;S.run=0;S.parked=false}
+  $("engine").textContent="Engine: "+(on?"on":"off");$("engine").setAttribute("aria-pressed",on?"true":"false")}
+function setDrive(d){
+  S.drive=d; if(d!=="park"){S.park=0;setEngine(true)} DY.zo=13;
+  Array.prototype.forEach.call($("drive").children,function(b){b.setAttribute("aria-pressed",b.dataset.drive===d?"true":"false")});
+  $("dhint").textContent=DHINT[d];
+}
+$("drive").addEventListener("click",function(e){var b=e.target.closest("button");if(b)setDrive(b.dataset.drive)});
+$("bSlow").addEventListener("click",function(){S.slow=!S.slow;this.setAttribute("aria-pressed",S.slow?"true":"false")});
+function toggleEngine(){if(S.park>0)return;if(S.engine)setDrive("park");setEngine(!S.engine)}
+function park(){setDrive("park");setEngine(false);S.parked=false;S.park=PARK}
+$("engine").addEventListener("click",toggleEngine);
+$("park").addEventListener("click",park);
+$("reset").addEventListener("click",function(){setDrive("park");DY.L=Q();DY.R=Q();S.mL=S.mR=1;S.load=0;S.starts=0;S.park=0;S.parked=false;$("load").value=0;$("loadOut").textContent="0 kg";setFault("none");setEngine(true)});
+$("load").addEventListener("input",function(){S.load=+this.value;$("loadOut").textContent=this.value+" kg"});
+$("tabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;$("side").setAttribute("data-tab",b.dataset.tab);
+  Array.prototype.forEach.call($("tabs").children,function(x){x.setAttribute("aria-pressed",x===b?"true":"false")})});
+setFault("none"); setDrive("park"); select("spring"); step(0.016); readouts();
+
+/* ---------- 3D scene ---------- */
+var T=window.THREE, stage=$("stage"), canvas=$("gl"), renderer;
+try{renderer=new T.WebGLRenderer({canvas:canvas,antialias:true})}catch(e){renderer=null}
+if(!renderer){
+  $("loading").textContent="This browser cannot show the 3D model. The controls and the text below work without it.";
+  setInterval(function(){S.t+=0.033;step(0.033);readouts();drawChart()},33);
+  return;
+}
+var V3=T.Vector3;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputEncoding=T.sRGBEncoding;
+renderer.toneMapping=T.ACESFilmicToneMapping; renderer.toneMappingExposure=0.9;
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=T.PCFSoftShadowMap;
+var scene=new T.Scene(); scene.background=new T.Color(0x0b1322); scene.fog=new T.Fog(0x0b1322,10,30);
+var pm=new T.PMREMGenerator(renderer); scene.environment=pm.fromScene(new T.RoomEnvironment(),0.04).texture;
+var camera=new T.PerspectiveCamera(36,1,0.05,50);
+var controls=new T.OrbitControls(camera,canvas);
+controls.enableDamping=true; controls.dampingFactor=0.08; controls.enablePan=false;
+controls.minDistance=1.3; controls.maxDistance=13; controls.maxPolarAngle=2.25;
+controls.autoRotate=!reduce; controls.autoRotateSpeed=0.55;
+var TARGET=new V3(0.1,0.6,0.25);
+function homeView(below){
+  var d=camera.aspect<1.25?5.4:4.7, dir=below?new V3(0.9,-0.75,-2.2):new V3(2.0,0.85,-2.7);
+  controls.target.copy(below?new V3(0,0.4,-0.2):TARGET);
+  camera.position.copy(controls.target).addScaledVector(dir.normalize(),below?d*0.5:d);
+  controls.update();
+}
+var sun=new T.DirectionalLight(0xffffff,1.1); sun.position.set(2.6,6,-1.2); sun.target.position.set(0,0,1.3); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.left=-3.8; sun.shadow.camera.right=3.8; sun.shadow.camera.top=3.8; sun.shadow.camera.bottom=-3.8; sun.shadow.camera.far=16; sun.shadow.bias=-0.0006;
+scene.add(sun); scene.add(sun.target); scene.add(new T.HemisphereLight(0x9db4ff,0x0b1322,0.35));
+
+/* road: it moves below the car */
+var roadTex, obst={};
+(function(){
+  var c=document.createElement("canvas"); c.width=256; c.height=512; var g=c.getContext("2d");
+  g.fillStyle="#141b29"; g.fillRect(0,0,256,512);
+  for(var i=0;i<2600;i++){var v=18+Math.random()*26|0; g.fillStyle="rgba("+v+","+(v+6)+","+(v+18)+",0.55)"; g.fillRect(Math.random()*256,Math.random()*512,1.5,1.5)}
+  g.fillStyle="#aeb6c4"; g.fillRect(256*0.3-2,0,3,512);
+  g.fillRect(256*0.7-2,40,3,190);
+  roadTex=new T.CanvasTexture(c); roadTex.encoding=T.sRGBEncoding; roadTex.wrapT=T.RepeatWrapping; roadTex.repeat.set(1,10); roadTex.anisotropy=4;
+  var rd=new T.Mesh(new T.PlaneGeometry(9,80),new T.MeshStandardMaterial({map:roadTex,roughness:0.92,metalness:0,envMapIntensity:0.2}));
+  rd.rotation.x=-Math.PI/2; rd.position.z=6; rd.receiveShadow=true; scene.add(rd);
+  var base=new T.Mesh(new T.CircleGeometry(60,48),new T.MeshBasicMaterial({color:0x0b1322})); base.rotation.x=-Math.PI/2; base.position.y=-0.01; scene.add(base);
+  var hole=new T.Group();
+  var h1=new T.Mesh(new T.CircleGeometry(0.5,36),new T.MeshBasicMaterial({color:0x03050a})); h1.rotation.x=-Math.PI/2; h1.scale.set(0.6,0.62,1); h1.position.y=0.004; hole.add(h1);
+  var h2=new T.Mesh(new T.RingGeometry(0.5,0.56,36),new T.MeshStandardMaterial({color:0x2a3348,roughness:1})); h2.rotation.x=-Math.PI/2; h2.scale.set(0.6,0.62,1); h2.position.y=0.005; hole.add(h2);
+  hole.position.x=0.82; obst.pothole=hole;
+  var bm=new T.Mesh(new T.SphereGeometry(1,28,14,0,Math.PI*2,0,Math.PI/2),new T.MeshStandardMaterial({color:0x4a556b,roughness:0.9})); bm.scale.set(0.3,0.05,0.25); bm.position.x=0.82; bm.castShadow=true; obst.bump=bm;
+  var sc=document.createElement("canvas"); sc.width=256; sc.height=8; var sg=sc.getContext("2d");
+  for(var k=0;k<8;k++){sg.fillStyle=k%2?"#15181d":"#e2b53c"; sg.fillRect(k*32,0,32,8)}
+  var st=new T.CanvasTexture(sc); st.encoding=T.sRGBEncoding;
+  var sb=new T.Mesh(new T.CylinderGeometry(1,1,3.6,28,1,false,0,Math.PI),new T.MeshStandardMaterial({map:st,roughness:0.8}));
+  sb.rotation.z=Math.PI/2; sb.rotation.y=0; sb.scale.set(0.07,1,0.45); sb.castShadow=true; var sbg=new T.Group(); sbg.add(sb); obst.speed=sbg;
+  for(var n in obst){obst[n].visible=false; scene.add(obst[n])}
+})();
+
+function M(color,metal,rough){return new T.MeshStandardMaterial({color:color,metalness:metal,roughness:rough,envMapIntensity:0.7})}
+var steel=M(0x8c97a8,0.9,0.35), dark=M(0x2a3140,0.7,0.5), rubber=M(0x14161b,0.0,0.85), alu=M(0xc9d0da,0.95,0.28),
+    plastic=M(0x1b212c,0.1,0.6), copper=M(0xb98a3a,0.3,0.5), cyan=M(0x2a6f85,0.2,0.5);
+function cyl(r,h,mat,axis,seg){var g=new T.CylinderGeometry(r,r,h,seg||28); if(axis==="x")g.rotateZ(Math.PI/2); if(axis==="z")g.rotateX(Math.PI/2); return new T.Mesh(g,mat)}
+function box(x,y,z,mat){return new T.Mesh(new T.BoxGeometry(x,y,z),mat)}
+var REG=[], EXL=[];
+function reg(id,obj){obj.traverse(function(o){if(o.isMesh){o.material=o.material.clone();o.userData.part=id;o.castShadow=true;REG.push(o)}});return obj}
+function shadow(obj){obj.traverse(function(o){if(o.isMesh)o.castShadow=true});return obj}
+function ex(obj,x,y,z){obj.userData.home=obj.position.clone();obj.userData.ex=new V3(x,y,z);EXL.push(obj);return obj}
+function glow(mesh,hex,i){mesh.userData.glow={c:new T.Color(hex),i:i||0};return mesh}
+
+var car=new T.Group(); scene.add(car);
+
+/* body: sections along the length of the car, joined to make one skin */
+var shell=new T.Group(), SHELLM=[];
+(function(){
+  function sq(v){return v*v}
+  var ZS=[]; for(var zz=3.9;zz>=-1.1001;zz-=0.05)ZS.push(+zz.toFixed(3));
+  var TK=[[3.9,1.0],[3.4,1.06],[2.45,1.11],[1.5,1.67],[0.6,1.71],[-0.45,1.69],[-0.74,1.64],[-0.98,1.14],[-1.1,1.08]];
+  function topRaw(z){z=clamp(z,-1.1,3.9);for(var i=0;i<TK.length-1;i++){var a=TK[i],b=TK[i+1];if(z<=a[0]&&z>=b[0])return a[1]+(b[1]-a[1])*(a[0]-z)/(a[0]-b[0])}return 1.05}
+  function top(z){return(topRaw(z-0.08)+2*topRaw(z)+topRaw(z+0.08))/4}
+  function yLow(z){var y=0.33; if(z>3.3)y+=0.1*sq((z-3.3)/0.6); if(z<-0.7)y+=0.1*sq((-0.7-z)/0.4);
+    [0,2.93].forEach(function(za){var d=z-za; if(Math.abs(d)<0.48)y=Math.max(y,0.37+Math.sqrt(0.2304-d*d))}); return y}
+  function wid(z){var f=1; if(z>3.0)f-=0.1*sq((z-3.0)/0.9); if(z<-0.5)f-=0.05*sq((-0.5-z)/0.6); return 0.965*f}
+  function capf(t){return Math.sqrt(Math.max(0,1-sq(1-clamp(t,0,1))))}
+  var NH=19, RN=2*NH+1, pos=[];
+  ZS.forEach(function(z){
+    var W=wid(z), yt=top(z), yl=yLow(z), yb=Math.min(1.02,yt-0.05), g=clamp((yt-yb)/0.66,0,1), r=0.02+0.07*g, yg=yt-r;
+    var e=1; if(z>3.72)e=capf((3.9-z)/0.18); if(z<-0.96)e=capf((z+1.1)/0.14);
+    var half=[], x, y, t, xg=0;
+    for(var j=0;j<=NH;j++){
+      if(j<=6){t=j/6; y=yl+(yb-yl)*t; x=W-0.05*sq(Math.max(0,1-(y-yl)/0.18))}
+      else if(j<=13){t=(j-6)/7; y=yb+(yg-yb)*t; x=W-0.01-0.17*g*t-0.02*g*Math.min(1,t*7); xg=x}
+      else{var a=(j-13)/6*Math.PI/2; x=xg*Math.cos(a); y=yg+r*Math.sin(a)}
+      half.push([x*(0.72+0.28*e),0.64+(y-0.64)*e]);
+    }
+    for(var i=0;i<RN;i++){var jj=i<=NH?i:2*NH-i, h=half[jj]; pos.push(i<=NH?h[0]:-h[0],h[1],z)}
+  });
+  var posAttr=new T.Float32BufferAttribute(pos,3);
+  function idx(z){return clamp(Math.round((3.9-z)/0.05),0,ZS.length-1)}
+  function grid(s0,s1,i0,i1){var ix=[]; for(var s=s0;s<s1;s++)for(var i=i0;i<i1;i++){var a=s*RN+i,b=(s+1)*RN+i,c=a+1,d=b+1; ix.push(a,b,c,b,d,c)} return ix}
+  var full=new T.BufferGeometry(); full.setAttribute("position",posAttr); full.setIndex(grid(0,ZS.length-1,0,RN-1)); full.computeVertexNormals();
+  var paint=new T.MeshPhysicalMaterial({color:0x050d33,metalness:0.8,roughness:0.32,clearcoat:1,clearcoatRoughness:0.1,side:T.DoubleSide,transparent:true,envMapIntensity:0.85});
+  var body=new T.Mesh(full,paint); body.castShadow=true; body.renderOrder=3; shell.add(body); SHELLM.push([paint,1,0.2]);
+  function patch(zHi,zLo,j0,j1,mat,across,xr){
+    var ix=across?grid(idx(zHi),idx(zLo),j0,2*NH-j0):grid(idx(zHi),idx(zLo),j0,j1).concat(grid(idx(zHi),idx(zLo),2*NH-j1,2*NH-j0));
+    var g=new T.BufferGeometry(); g.setAttribute("position",posAttr); g.setAttribute("normal",full.getAttribute("normal")); g.setIndex(ix);
+    mat.polygonOffset=true; mat.polygonOffsetFactor=-2; mat.polygonOffsetUnits=-2; mat.side=T.DoubleSide; mat.transparent=true;
+    var m=new T.Mesh(g,mat); m.renderOrder=4; shell.add(m); if(SHELLM.every(function(a){return a[0]!==mat}))SHELLM.push([mat,1,xr]);
+  }
+  var glass=new T.MeshStandardMaterial({color:0x070b12,metalness:0.9,roughness:0.06,envMapIntensity:1.3});
+  var trim=new T.MeshStandardMaterial({color:0x14171c,metalness:0.1,roughness:0.75});
+  var red=new T.MeshStandardMaterial({color:0x4a0906,emissive:0xb0140c,emissiveIntensity:0.7,roughness:0.25});
+  var lamp=new T.MeshStandardMaterial({color:0xcfd6e2,emissive:0xbfd0ff,emissiveIntensity:0.35,roughness:0.15,metalness:0.6});
+  patch(3.9,-1.1,0,1,trim,false,0.25);
+  patch(1.42,0.66,7,12,glass,false,0.12); patch(0.56,-0.36,7,12,glass,false,0.12); patch(-0.46,-0.8,7,12,glass,false,0.12);
+  patch(2.36,1.58,14,0,glass,true,0.12); patch(-0.78,-0.97,14,0,glass,true,0.12);
+  patch(-0.86,-1.06,4,6,red,false,0.6); patch(3.84,3.6,4,6,lamp,false,0.5);
+  [1,-1].forEach(function(sd){var mr=box(0.15,0.1,0.07,paint); mr.position.set(sd*1.0,1.1,1.74); shell.add(mr)});
+})();
+car.add(shell); ex(shell,0,1.35,0);
+function setBody(mode){
+  S.body=mode; shell.visible=mode<2;
+  SHELLM.forEach(function(a){a[0].opacity=mode===0?a[2]:a[1]; a[0].depthWrite=mode===1});
+  $("bBody").textContent=["X-ray","Paint","No body"][mode];
+}
+
+/* rear axle carrier, final drive, parts that stay with the body */
+(function(){
+  var sub=new T.Group();
+  [0.22,-0.22].forEach(function(z){var c=cyl(0.028,0.66,dark,"x"); c.position.set(0,0.31,z); sub.add(c)});
+  [1,-1].forEach(function(sd){
+    var c=cyl(0.03,0.52,dark,"z"); c.position.set(sd*0.3,0.32,0); sub.add(c);
+    var t=box(0.05,0.3,0.1,dark); t.position.set(sd*0.31,0.45,0.02); sub.add(t);
+    var mnt=box(0.2,0.04,0.2,dark); mnt.position.set(sd*0.48,0.64,-0.16); sub.add(mnt);
+    var st=box(0.04,0.04,0.3,dark); st.position.set(sd*0.38,0.64,-0.05); sub.add(st);
+    var dm=box(0.1,0.04,0.1,dark); dm.position.set(sd*0.56,0.86,0.16); sub.add(dm);
+  });
+  var diff=new T.Mesh(new T.SphereGeometry(0.12,28,20),alu); diff.scale.set(1,0.95,1.25); diff.position.set(0,0.37,0.02); sub.add(diff);
+  var nose=cyl(0.06,0.2,alu,"z"); nose.position.set(0,0.37,0.2); sub.add(nose);
+  var prop=cyl(0.03,0.72,steel,"z"); prop.position.set(0,0.38,0.64); sub.add(prop);
+  car.add(shadow(sub));
+})();
+
+/* air supply unit */
+var unit=new T.Group(), motor;
+(function(){
+  var br=box(0.34,0.012,0.14,dark); br.position.y=-0.065; unit.add(br);
+  motor=cyl(0.05,0.16,M(0x3b4558,0.8,0.35),"x"); motor.position.x=-0.07; unit.add(motor);
+  var head=box(0.075,0.1,0.085,alu); head.position.set(0.05,0.005,0); unit.add(head);
+  for(var i=0;i<4;i++){var fin=box(0.08,0.006,0.09,alu); fin.position.set(0.05,0.065+i*0.012,0); unit.add(fin)}
+  var dry=cyl(0.028,0.13,M(0xd8dde6,0.4,0.4),"x"); dry.position.set(0.02,0.0,0.075); unit.add(dry);
+  var cap=cyl(0.052,0.02,plastic,"x"); cap.position.x=-0.16; unit.add(cap);
+  unit.position.set(-0.1,0.52,-0.66); car.add(reg("unit",unit)); ex(unit,0,-0.02,-0.85);
+  glow(motor,0xf0b84a,0);
+})();
+
+/* valve block */
+var valve=new T.Group(), solL, solR;
+(function(){
+  var b=box(0.085,0.05,0.055,alu); valve.add(b);
+  solL=cyl(0.017,0.05,plastic); solL.position.set(0.02,0.05,0); valve.add(solL);
+  solR=cyl(0.017,0.05,plastic); solR.position.set(-0.02,0.05,0); valve.add(solR);
+  valve.position.set(0.2,0.53,-0.66); car.add(reg("valve",valve)); ex(valve,0.2,0.3,-0.85);
+  glow(solL,0xf0b84a,0); glow(solR,0xf0b84a,0);
+})();
+
+/* air lines with moving air */
+var lines=new T.Group(), curveL, curveR, dotsL=[], dotsR=[], lineMeshes=[];
+(function(){
+  curveL=new T.CatmullRomCurve3([new V3(0.22,0.58,-0.66),new V3(0.3,0.7,-0.56),new V3(0.44,0.74,-0.34),new V3(0.48,0.72,-0.2),new V3(0.48,0.66,-0.16)]);
+  curveR=new T.CatmullRomCurve3([new V3(0.18,0.58,-0.66),new V3(0.05,0.72,-0.56),new V3(-0.34,0.75,-0.38),new V3(-0.48,0.72,-0.2),new V3(-0.48,0.66,-0.16)]);
+  var feed=new T.CatmullRomCurve3([new V3(-0.05,0.56,-0.66),new V3(0.06,0.6,-0.7),new V3(0.16,0.55,-0.68)]);
+  [curveL,curveR,feed].forEach(function(c){var m=new T.Mesh(new T.TubeGeometry(c,48,0.0085,10),copper); glow(m,0xf0b84a,0); lines.add(m); lineMeshes.push(m)});
+  reg("lines",lines);
+  var dm=new T.MeshBasicMaterial({color:0xffd27a});
+  for(var i=0;i<6;i++){var a=new T.Mesh(new T.SphereGeometry(0.016,10,8),dm), b=a.clone(); lines.add(a); lines.add(b); dotsL.push(a); dotsR.push(b)}
+  car.add(lines); ex(lines,0,0.3,-0.3);
+})();
+
+/* control unit, relay, fuse box */
+var ehc=new T.Group(), relay=new T.Group(), fuse=new T.Group(), relayBody, warn;
+(function(){
+  var b=box(0.04,0.15,0.2,M(0x20262f,0.3,0.5)); ehc.add(b);
+  var con=box(0.03,0.05,0.16,M(0x0d4f66,0.2,0.5)); con.position.set(0,-0.1,0); ehc.add(con);
+  warn=new T.Mesh(new T.SphereGeometry(0.012,12,10),new T.MeshBasicMaterial({color:0x3a1d18})); warn.position.set(0.024,0.05,-0.07); ehc.add(warn);
+  ehc.position.set(-0.76,1.0,-0.55); car.add(reg("ehc",ehc)); ex(ehc,-0.55,0.35,-0.25);
+  warn.userData.part="ehc";
+  relayBody=box(0.04,0.05,0.045,M(0x1d2d3a,0.2,0.5)); relay.add(relayBody);
+  for(var i=0;i<4;i++){var p=box(0.004,0.02,0.01,alu); p.position.set(0,-0.034,-0.015+i*0.01); relay.add(p)}
+  relay.position.set(-0.76,0.8,-0.8); car.add(reg("relay",relay)); ex(relay,-0.55,0.05,-0.5);
+  glow(relayBody,0x69cfe6,0);
+  var fb=box(0.035,0.13,0.2,M(0x20262f,0.3,0.6)); fuse.add(fb);
+  var cols=[0x3d6fd0,0xc94a3a,0xd9b13a,0x3d6fd0,0x4d9a5a,0xc94a3a];
+  for(var j=0;j<6;j++){var f=box(0.012,0.022,0.018,M(cols[j],0.1,0.4)); f.position.set(0.02,0.03-(j%2)*0.05,-0.06+Math.floor(j/2)*0.06); fuse.add(f)}
+  fuse.position.set(-0.76,0.78,-0.44); car.add(reg("fuse",fuse)); ex(fuse,-0.55,0.0,0.1);
+})();
+
+/* wiring */
+var wires={};
+(function(){
+  function w(name,pts){var c=new T.CatmullRomCurve3(pts.map(function(p){return new V3(p[0],p[1],p[2])}));
+    var m=new T.Mesh(new T.TubeGeometry(c,40,0.0045,6),new T.MeshStandardMaterial({color:0x1c4a5a,emissive:0x69cfe6,emissiveIntensity:0.1,roughness:0.6})); wires[name]=m; wg.add(m)}
+  var wg=new T.Group();
+  w("sL",[[0.25,0.45,-0.27],[0.2,0.66,-0.36],[-0.3,0.78,-0.48],[-0.72,0.9,-0.55]]);
+  w("sR",[[-0.25,0.45,-0.27],[-0.42,0.66,-0.36],[-0.66,0.8,-0.5],[-0.74,0.9,-0.53]]);
+  w("cmd",[[-0.76,0.9,-0.62],[-0.72,0.86,-0.74],[-0.76,0.83,-0.8]]);
+  w("pow",[[-0.76,0.77,-0.8],[-0.6,0.62,-0.78],[-0.36,0.54,-0.7],[-0.26,0.52,-0.66]]);
+  w("val",[[-0.74,0.9,-0.58],[-0.4,0.7,-0.62],[0.0,0.66,-0.7],[0.2,0.6,-0.67]]);
+  w("fz",[[-0.76,0.74,-0.52],[-0.72,0.72,-0.66],[-0.76,0.78,-0.79]]);
+  car.add(wg); ex(wg,-0.15,0.4,-0.3);
+})();
+
+/* height sensor bodies (stay with the axle carrier) */
+var sensorBodies=[];
+[1,-1].forEach(function(sd){
+  var g=new T.Group(); var b=box(0.055,0.04,0.03,M(0x0d4f66,0.2,0.5)); g.add(b);
+  var lv=box(0.07,0.012,0.012,alu); lv.position.set(sd*0.045,0,-0.02); g.add(lv);
+  g.position.set(sd*0.25,0.43,-0.27); car.add(reg("sensor",g)); ex(g,0,0,-0.5); sensorBodies.push(g);
+});
+
+/* wheels */
+function wheel(sd,z){
+  var g=new T.Group();
+  var pts=[[0.235,-0.13],[0.33,-0.138],[0.362,-0.115],[0.372,-0.07],[0.372,0.07],[0.362,0.115],[0.33,0.138],[0.235,0.13]].map(function(p){return new T.Vector2(p[0],p[1])});
+  var tg=new T.LatheGeometry(pts,56); tg.rotateZ(Math.PI/2); g.add(new T.Mesh(tg,rubber));
+  for(var i=-2;i<=2;i++){var gr=new T.Mesh(new T.TorusGeometry(0.3725,0.004,6,56),M(0x06070a,0,1)); gr.rotation.y=Math.PI/2; gr.position.x=i*0.045; g.add(gr)}
+  var barrel=cyl(0.238,0.22,M(0x9aa3b2,0.95,0.3),"x",40); g.add(barrel);
+  var face=cyl(0.07,0.03,alu,"x"); face.position.x=sd*0.115; g.add(face);
+  for(var k=0;k<5;k++){var sp=box(0.02,0.19,0.045,alu); var a=k*Math.PI*2/5; sp.position.set(sd*0.112,Math.cos(a)*0.14,Math.sin(a)*0.14); sp.rotation.x=a; g.add(sp)}
+  var disc=cyl(0.165,0.022,M(0x8a8f98,0.9,0.45),"x",40); disc.position.x=-sd*0.125; g.add(disc);
+  var spin=new T.Group(); while(g.children.length)spin.add(g.children[0]); g.add(spin);
+  g.position.set(sd*0.82,0.37,z); scene.add(shadow(g)); ex(g,sd*0.55,0,0);
+  var carrier=box(0.045,0.34,0.4,dark); carrier.position.set(sd*0.655,0.39,z); scene.add(shadow(carrier));
+  return {g:g,spin:spin,carrier:carrier};
+}
+var WH={rL:wheel(1,0),rR:wheel(-1,0),fL:wheel(1,2.93),fR:wheel(-1,2.93)};
+
+/* front axle: steel coil springs, shown for comparison */
+class Helix extends T.Curve{getPoint(t,o){var a=t*Math.PI*2*5.5;return(o||new V3()).set(0.062*Math.cos(a),t-0.5,0.062*Math.sin(a))}}
+function front(sd){
+  var d={sd:sd}; d.strut=cyl(0.022,1,M(0x23282f,0.6,0.35)); d.coil=new T.Mesh(new T.TubeGeometry(new Helix(),120,0.011,8),M(0x3a4660,0.8,0.35)); d.arm=box(0.035,1,0.1,steel);
+  [d.strut,d.coil,d.arm].forEach(function(m){m.castShadow=true;scene.add(m)}); return d;
+}
+var FL=front(1), FR=front(-1);
+function poseFront(d,zw){
+  var sd=d.sd, hub=new V3(sd*0.66,0.42+zw,2.93), tp=P(sd*0.6,1.02,2.93);
+  stretch(d.strut,hub,tp); stretch(d.coil,lerp(hub,tp,0.42),lerp(hub,tp,0.97));
+  stretch(d.arm,new V3(sd*0.64,0.26+zw,2.93),P(sd*0.3,0.3,2.93));
+}
+
+/* moving parts, one set for each side. +x is the left side of the car. */
+function side(sd){
+  var d={sd:sd};
+  d.rearArm=reg("arm",box(0.035,1,0.1,steel)); d.frontArm=reg("arm",box(0.03,1,0.07,steel));
+  d.upper=cyl(0.015,1,steel); d.shaft=cyl(0.02,1,M(0x596273,0.9,0.4)); shadow(d.upper); shadow(d.shaft);
+  d.dTube=reg("damper",cyl(0.03,1,M(0x23282f,0.6,0.35))); d.dRod=reg("damper",cyl(0.011,1,alu));
+  d.cap=reg("spring",cyl(0.082,0.035,alu,null,36));
+  d.bellows=reg("spring",cyl(0.074,1,M(0x17181c,0.0,0.55),null,36));
+  var rg=new T.TorusGeometry(0.066,0.014,12,36); rg.rotateX(Math.PI/2);
+  d.ring=reg("spring",new T.Mesh(rg,M(0x17181c,0.0,0.55)));
+  d.piston=reg("spring",cyl(0.05,1,M(0x3b4558,0.7,0.4),null,32));
+  d.link=reg("sensor",cyl(0.006,1,alu,null,10));
+  glow(d.bellows,0xf0b84a,0.2); glow(d.ring,0xf0b84a,0.2);
+  ["rearArm","frontArm","upper","shaft","dRod","dTube","piston","bellows","ring","cap","link"].forEach(function(k){scene.add(d[k])});
+  d.puffs=[]; var pmat=new T.MeshBasicMaterial({color:0xff8a66,transparent:true,opacity:0.8});
+  for(var i=0;i<7;i++){var p=new T.Mesh(new T.SphereGeometry(0.014,8,6),pmat); p.visible=false; scene.add(p); d.puffs.push(p)}
+  d.mid=new V3();
+  return d;
+}
+var DL=side(1), DR=side(-1);
+
+var UP=new V3(0,1,0), _d=new V3();
+function stretch(m,a,b){_d.subVectors(b,a); var L=Math.max(_d.length(),0.001); m.position.copy(a).addScaledVector(_d,0.5); m.quaternion.setFromUnitVectors(UP,_d.multiplyScalar(1/L)); m.scale.y=L; return L}
+function P(x,y,z){return car.localToWorld(new V3(x,y,z))}
+function lerp(a,b,t){return new V3().lerpVectors(a,b,t)}
+var EXS=new V3(0,0.5,-0.15), EXD=new V3(0,0.45,0.45), EXN=new V3(0,0,-0.5);
+
+function poseSide(d,p,flowing,leaking,zw){
+  var sd=d.sd, k=S.k;
+  var hubR=new V3(sd*0.64,0.26+zw,-0.16), pivR=P(sd*0.27,0.30,-0.16); stretch(d.rearArm,hubR,pivR);
+  var hubF=new V3(sd*0.64,0.26+zw,0.16), pivF=P(sd*0.27,0.30,0.16); stretch(d.frontArm,hubF,pivF);
+  stretch(d.upper,new V3(sd*0.635,0.52+zw,0.02),P(sd*0.335,0.56,0.02));
+  stretch(d.shaft,new V3(sd*0.66,0.37+zw,0),P(sd*0.1,0.37,0.02));
+  var es=EXS.clone().multiplyScalar(k);
+  var A=P(sd*0.48,0.62,-0.16).add(es), B=lerp(hubR,pivR,0.45).add(new V3(0,0.02,0)).add(es);
+  var dir=new V3().subVectors(B,A), len=dir.length(); dir.multiplyScalar(1/len);
+  var pl=Math.min(0.13,len*0.6), pt=B.clone().addScaledVector(dir,-pl);
+  stretch(d.piston,pt,B);
+  var be=pt.clone().addScaledVector(dir,Math.min(0.035,pl*0.3)); stretch(d.bellows,A,be);
+  d.ring.position.copy(be); d.ring.quaternion.copy(d.bellows.quaternion);
+  d.cap.position.copy(A); d.cap.quaternion.copy(d.bellows.quaternion);
+  var gi=clamp((p-3)/9,0.05,1)*0.75+(flowing?0.25+0.15*Math.sin(S.t*9):0);
+  d.bellows.userData.glow.i=gi; d.ring.userData.glow.i=gi;
+  d.mid.lerpVectors(A,be,0.5);
+  var ed=EXD.clone().multiplyScalar(k), dt=P(sd*0.56,0.84,0.16).add(ed), db=new V3(sd*0.61,0.28+zw,0.16).add(ed);
+  stretch(d.dRod,dt,db); stretch(d.dTube,lerp(dt,db,0.46),db);
+  var en=EXN.clone().multiplyScalar(k);
+  stretch(d.link,P(sd*0.32,0.43,-0.29).add(en),lerp(hubR,pivR,0.72).add(new V3(0,0.02,-0.07)).add(en));
+  for(var i=0;i<d.puffs.length;i++){
+    var q=d.puffs[i]; q.visible=leaking; if(!leaking)continue;
+    var ph=reduce?(i+1)/8:((S.t*0.8+i/7)%1);
+    q.position.set(d.mid.x+sd*(0.08+ph*0.3),d.mid.y-0.03+ph*0.2+Math.sin(i*2.1)*0.03,d.mid.z+Math.cos(i*1.7)*0.09*ph);
+    q.scale.setScalar(1.6-ph*1.3);
+  }
+}
+function dots(arr,curve,up,dn){
+  for(var i=0;i<arr.length;i++){
+    arr[i].visible=up||dn; if(!(up||dn))continue;
+    var t=(i/arr.length+(reduce?0:S.t*0.55*(up?1:-1)))%1; if(t<0)t+=1;
+    arr[i].position.copy(curve.getPoint(t));
+  }
+}
+
+var SELC=new T.Color(0x4f86ff), _c=new T.Color(), _v=new V3();
+var ANCH={
+  spring:function(){return _v.copy(DL.mid)}, damper:function(){return _v.copy(DL.dTube.position)},
+  arm:function(){return _v.copy(DL.rearArm.position)}, sensor:function(){return sensorBodies[0].getWorldPosition(_v)},
+  unit:function(){return unit.getWorldPosition(_v)}, valve:function(){return valve.getWorldPosition(_v)},
+  lines:function(){return lines.localToWorld(curveL.getPoint(0.45,_v))}, ehc:function(){return ehc.getWorldPosition(_v)},
+  relay:function(){return relay.getWorldPosition(_v)}, fuse:function(){return fuse.getWorldPosition(_v)}
+};
+
+function pose(){
+  var f=F, k=S.k, hL=DY.L.zb, hR=DY.R.zb;
+  car.position.y=(hL+hR)/2; car.rotation.z=Math.atan((hL-hR)/0.96); car.rotation.x=Math.asin(clamp((hL+hR)/2/2.93,-0.2,0.2));
+  for(var i=0;i<EXL.length;i++){var o=EXL[i]; o.position.copy(o.userData.home).addScaledVector(o.userData.ex,k)}
+  unit.position.y+=f.comp&&!reduce?Math.sin(S.t*70)*0.0015:0;
+  car.updateMatrixWorld(true);
+  var zs=[DY.L.zw,DY.R.zw,DY.fL,DY.fR], ws=[WH.rL,WH.rR,WH.fL,WH.fR];
+  for(var w=0;w<4;w++){ws[w].g.position.y+=zs[w]; ws[w].carrier.position.y=0.39+zs[w]; ws[w].spin.rotation.x=DY.spin}
+  roadTex.offset.y=-(DY.dist/8)%1;
+  for(var n in obst){obst[n].visible=S.drive===n; obst[n].position.z=DY.zo}
+  $("slow").style.display=f.near&&DY.ts<0.6?"block":"none";
+  poseSide(DL,f.pL,f.upL||f.dnL,S.fault==="leakL"&&S.mL>0.13,DY.L.zw);
+  poseSide(DR,f.pR,f.upR||f.dnR,S.fault==="leakR"&&S.mR>0.13,DY.R.zw);
+  poseFront(FL,DY.fL); poseFront(FR,DY.fR);
+  dots(dotsL,curveL,f.upL,f.dnL); dots(dotsR,curveR,f.upR,f.dnR);
+  lineMeshes[0].userData.glow.i=(f.upL||f.dnL)?0.7:0; lineMeshes[1].userData.glow.i=(f.upR||f.dnR)?0.7:0; lineMeshes[2].userData.glow.i=f.comp?0.7:0;
+  motor.userData.glow.i=f.comp?0.8+0.2*Math.sin(S.t*30):0;
+  solL.userData.glow.i=(f.upL||f.dnL)?1:0; solR.userData.glow.i=(f.upR||f.dnR)?1:0;
+  relayBody.userData.glow.i=f.comp?1:0;
+  warn.material.color.setHex(S.lock?(Math.sin(S.t*8)>0?0xff6a4d:0x7a2a1c):0x3a1d18);
+  var live=S.engine&&!f.parking;
+  wires.sL.material.emissiveIntensity=wires.sR.material.emissiveIntensity=live?1.2:0.1;
+  wires.cmd.material.emissiveIntensity=f.want?1.6:0.1;
+  wires.pow.material.emissiveIntensity=wires.fz.material.emissiveIntensity=f.comp?1.6:0.1;
+  wires.val.material.emissiveIntensity=(f.upL||f.upR||f.dnL||f.dnR)?1.6:0.1;
+  var pulse=0.5+0.2*Math.sin(S.t*4);
+  for(var j=0;j<REG.length;j++){
+    var m=REG[j], e=m.material.emissive, g=m.userData.glow; if(!e)continue;
+    if(g)e.copy(g.c).multiplyScalar(g.i); else e.setRGB(0,0,0);
+    if(m.userData.part===S.sel)e.add(_c.copy(SELC).multiplyScalar(g?pulse*0.35:pulse));
+  }
+}
+function placeTag(){
+  var tag=$("tag"), v=ANCH[S.sel](); v.project(camera);
+  if(S.body===1||v.z>1||v.z<-1){tag.style.display="none";return}
+  var w=stage.clientWidth, h=stage.clientHeight;
+  var x=clamp((v.x*0.5+0.5)*w,60,w-60), y=clamp((-v.y*0.5+0.5)*h,40,h-60);
+  tag.style.display="block"; tag.style.transform="translate("+x.toFixed(1)+"px,"+y.toFixed(1)+"px) translate(-50%,-150%)";
+}
+
+function placeBar(el,d,p){
+  var v=_v.copy(d.mid); v.project(camera);
+  if(v.z>1||v.z<-1){el.style.display="none";return}
+  var w=stage.clientWidth, h=stage.clientHeight;
+  el.textContent=p.toFixed(1); el.style.display="block";
+  el.style.transform="translate("+((v.x*0.5+0.5)*w).toFixed(1)+"px,"+((-v.y*0.5+0.5)*h).toFixed(1)+"px) translate(-50%,70%)";
+}
+
+/* picking: a tap selects a part, a drag turns the model */
+var ray=new T.Raycaster(), down=null;
+canvas.addEventListener("pointerdown",function(e){down={x:e.clientX,y:e.clientY,t:performance.now()};controls.autoRotate=false;$("drag").style.display="none"});
+canvas.addEventListener("pointerup",function(e){
+  if(!down)return; var moved=Math.hypot(e.clientX-down.x,e.clientY-down.y), dtm=performance.now()-down.t; down=null;
+  if(moved>7||dtm>500)return;
+  var r=canvas.getBoundingClientRect();
+  ray.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1),camera);
+  var hit=ray.intersectObjects(REG,false);
+  if(hit.length){select(hit[0].object.userData.part);var pb=$("tabs").children[1];if(pb.offsetParent)pb.click()}
+});
+
+function setExplode(on){S.explode=on;$("bExplode").setAttribute("aria-pressed",on?"true":"false");$("bExplode").textContent=on?"Assemble":"Take apart"}
+function toggleBody(){setBody((S.body+1)%3)}
+$("bExplode").addEventListener("click",function(){setExplode(!S.explode)});
+$("bBody").addEventListener("click",toggleBody);
+$("bView").addEventListener("click",function(){controls.autoRotate=false;homeView(false)});
+$("bUnder").addEventListener("click",function(){controls.autoRotate=false;homeView(true)});
+window.addEventListener("keydown",function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return; var t=e.target; if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;
+  var k=e.key.toLowerCase();
+  if(k==="e")setExplode(!S.explode); else if(k==="b")toggleBody(); else if(k==="v")homeView(false); else if(k==="u")homeView(true);
+  else if(k==="p")park(); else if(k==="s")toggleEngine(); else if(k>="0"&&k<="5")setFault(FAULTS[+k]);
+  else if("qwrty".indexOf(k)>=0&&k.length===1)setDrive(["park","smooth","pothole","bump","speed"]["qwrty".indexOf(k)]);
+});
+
+function resize(){var w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+if(window.ResizeObserver)new ResizeObserver(resize).observe(stage); else window.addEventListener("resize",resize);
+resize(); homeView(false); setBody(0);
+
+var last=0, first=true;
+function frame(ts){
+  var dt=last?Math.min(0.05,(ts-last)/1000):0.016; last=ts; S.t+=dt;
+  step(dt);
+  var kt=S.explode?1:0; S.k+=(kt-S.k)*Math.min(1,dt*(reduce?60:5));
+  pose(); controls.update(); renderer.render(scene,camera); placeTag(); placeBar($("barL"),DL,F.pL); placeBar($("barR"),DR,F.pR); readouts(); drawChart();
+  if(first){first=false;$("loading").style.display="none"}
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
