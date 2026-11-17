@@ -289,6 +289,8 @@ ol,ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;max-
     <li>Point with a controller or your hand. Push the trigger or pinch to use a button or to select a part.</li>
     <li>Left thumbstick: move. Right thumbstick left or right: turn in steps. Right thumbstick up or down: move up or down.</li>
     <li>Use <strong>On a lift</strong> to stand below the car and look up at the springs.</li>
+    <li>Point at a panel and hold the grip button to move the panel. Release the grip to put it down.</li>
+    <li>Hold the two grip buttons, then move your hands apart to take the car apart. Move them together to assemble it. You can stop at any point between.</li>
     <li>If the moving road makes you feel bad, look at the light disk below your feet, or select <strong>Parked</strong>.</li>
   </ul>
 </section>
@@ -343,7 +345,7 @@ var HINTS={
 };
 
 /* ---------- simulation ---------- */
-var S={drive:"park",slow:true,body:0,mL:1,mR:1,load:0,engine:true,fault:"none",stL:"hold",stR:"hold",run:0,lock:false,starts:0,wasOn:false,park:0,parked:false,t:0,sel:"spring",explode:false,k:0};
+var S={drive:"park",slow:true,body:0,mL:1,mR:1,load:0,engine:true,fault:"none",stL:"hold",stR:"hold",run:0,lock:false,starts:0,wasOn:false,park:0,parked:false,t:0,sel:"spring",explode:false,k:0,kt:0};
 var FILL=0.12, WEAK=0.015, LEAK=0.02, LIMIT=12, PARK=2.5;
 var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 function clamp(v,a,b){return v<a?a:v>b?b:v}
@@ -966,7 +968,8 @@ canvas.addEventListener("pointerup",function(e){
   if(hit.length){select(hit[0].object.userData.part);var pb=$("tabs").children[1];if(pb.offsetParent)pb.click()}
 });
 
-function setExplode(on){S.explode=on;$("bExplode").setAttribute("aria-pressed",on?"true":"false");$("bExplode").textContent=on?"Assemble":"Take apart"}
+function explodeLabel(on){S.explode=on;$("bExplode").setAttribute("aria-pressed",on?"true":"false");$("bExplode").textContent=on?"Assemble":"Take apart"}
+function setExplode(on){S.kt=on?1:0;explodeLabel(on)}
 function toggleBody(){setBody((S.body+1)%3)}
 $("bExplode").addEventListener("click",function(){setExplode(!S.explode)});
 $("bBody").addEventListener("click",toggleBody);
@@ -1002,9 +1005,10 @@ function panel(wpx,hpx,wm){
   mesh.rotation.order="YXZ"; vr.add(mesh);
   return {c:c,g:c.getContext("2d"),tex:tex,mesh:mesh,w:wpx,h:hpx,btn:[]};
 }
-var CP=panel(1024,860,0.78), IP=panel(1024,980,0.82);
-CP.mesh.position.set(-0.6,1.02,-0.6); CP.mesh.rotation.set(-0.38,0.78,0);
-IP.mesh.position.set(0.66,1.24,-0.72); IP.mesh.rotation.set(-0.12,-0.74,0);
+var CP=panel(1024,900,0.78), IP=panel(1024,980,0.82);
+function placePanels(){CP.mesh.position.set(-0.6,1.02,-0.6); CP.mesh.rotation.set(-0.38,0.78,0);
+  IP.mesh.position.set(0.66,1.24,-0.72); IP.mesh.rotation.set(-0.12,-0.74,0)}
+placePanels();
 var FS='"IBM Plex Sans",system-ui,sans-serif', FM='"IBM Plex Mono",ui-monospace,monospace', FD='"Barlow Condensed","Arial Narrow",sans-serif';
 function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
 function bg(P){var g=P.g; g.clearRect(0,0,P.w,P.h); rr(g,2,2,P.w-4,P.h-4,26); g.fillStyle="rgba(15,24,43,0.94)"; g.fill(); g.strokeStyle="#27364f"; g.lineWidth=3; g.stroke()}
@@ -1034,6 +1038,7 @@ function drawCtrl(){
   row(ORDER.slice(5).map(function(id){return[PARTS[id].name.replace(" (EHC)","").replace("Compressor relay","Relay"),S.sel===id,function(){select(id)}]}));
   head("Your position");
   row([["Rear",false,function(){vrView("rear")}],["At the wheel",false,function(){vrView("side")}],["On a lift",false,function(){vrView("lift")}],["Behind",false,function(){vrView("behind")}],["Exit VR",false,function(){var s=renderer.xr.getSession();if(s)s.end()}]]);
+  g.fillStyle="#94a3bd"; g.font="400 20px "+FS; g.fillText("Grip on a panel: move it.   Both grips: move hands apart or together.",30,y+2);
   P.btn.forEach(function(b){
     var hv=HOV[b.id]; rr(g,b.x,b.y,b.w,b.h,12);
     g.fillStyle=b.on?"#e7edf6":hv?"#24375a":"#16233d"; g.fill(); g.lineWidth=hv?4:2; g.strokeStyle=hv?"#69cfe6":b.on?"#e7edf6":"#33456a"; g.stroke();
@@ -1094,7 +1099,7 @@ for(var ci=0;ci<2;ci++)(function(i){
   c.add(line);
   var tip=new T.Mesh(new T.ConeGeometry(0.012,0.05,12),new T.MeshBasicMaterial({color:0x69cfe6})); tip.rotation.x=-Math.PI/2; c.add(tip);
   var dot=new T.Mesh(new T.SphereGeometry(0.009,12,8),new T.MeshBasicMaterial({color:0xffffff,depthTest:false})); dot.renderOrder=11; dot.visible=false; scene.add(dot);
-  var o={c:c,line:line,dot:dot,src:null,btn:null,part:null,snap:0};
+  var o={c:c,line:line,dot:dot,src:null,btn:null,part:null,panel:null,hold:null,sq:false,snap:0};
   c.addEventListener("connected",function(e){o.src=e.data});
   c.addEventListener("disconnected",function(){o.src=null});
   c.addEventListener("selectstart",function(){
@@ -1103,8 +1108,44 @@ for(var ci=0;ci<2;ci++)(function(i){
     else if(o.part){select(o.part); hit=true}
     if(hit&&o.src&&o.src.gamepad&&o.src.gamepad.hapticActuators&&o.src.gamepad.hapticActuators[0])try{o.src.gamepad.hapticActuators[0].pulse(0.45,30)}catch(err){}
   });
+  c.addEventListener("squeezestart",function(){
+    o.sq=true;
+    var other=CTR[1-i];
+    if(o.panel&&!(other&&other.hold===o.panel)){o.hold=o.panel; o.c.attach(o.panel.mesh); buzz(o,0.35,25)}
+  });
+  c.addEventListener("squeezeend",function(){
+    o.sq=false;
+    if(o.hold){vr.attach(o.hold.mesh); o.hold=null; buzz(o,0.2,15)}
+  });
   dolly.add(c); CTR.push(o);
 })(ci);
+function buzz(o,v,ms){if(o.src&&o.src.gamepad&&o.src.gamepad.hapticActuators&&o.src.gamepad.hapticActuators[0])try{o.src.gamepad.hapticActuators[0].pulse(v,ms)}catch(err){}}
+
+/* two-hand gesture: hold both grips, move the hands apart to take the car apart, together to assemble it */
+var TWO=null, twoA=new V3(), twoB=new V3();
+var bridge=new T.Line(new T.BufferGeometry().setFromPoints([new V3(),new V3()]),new T.LineBasicMaterial({color:0xf0b84a,transparent:true,opacity:0.9,depthTest:false}));
+bridge.renderOrder=11; bridge.visible=false; bridge.frustumCulled=false; scene.add(bridge);
+var twoTag=(function(){var c=document.createElement("canvas"); c.width=320; c.height=96; var t=new T.CanvasTexture(c); t.encoding=T.sRGBEncoding;
+  var sp=new T.Sprite(new T.SpriteMaterial({map:t,depthTest:false,transparent:true,toneMapped:false})); sp.scale.set(0.2,0.06,1); sp.renderOrder=12; sp.visible=false; scene.add(sp); return {s:sp,c:c,t:t,v:-1}})();
+function twoHand(){
+  var A=CTR[0], B=CTR[1];
+  if(A&&B&&A.sq&&B.sq&&!A.hold&&!B.hold&&A.src&&B.src){
+    twoA.setFromMatrixPosition(A.c.matrixWorld); twoB.setFromMatrixPosition(B.c.matrixWorld);
+    var d=twoA.distanceTo(twoB);
+    if(!TWO){TWO={d0:d,k0:S.k,last:-1}; buzz(A,0.3,20); buzz(B,0.3,20)}
+    var k=clamp(TWO.k0+(d-TWO.d0)/0.5,0,1);
+    if((k===0||k===1)&&k!==TWO.last){buzz(A,0.6,40); buzz(B,0.6,40)}
+    TWO.last=k; S.k=k; S.kt=k; if((k>0.5)!==S.explode)explodeLabel(k>0.5);
+    var pa=bridge.geometry.attributes.position; pa.setXYZ(0,twoA.x,twoA.y,twoA.z); pa.setXYZ(1,twoB.x,twoB.y,twoB.z); pa.needsUpdate=true; bridge.visible=true;
+    twoTag.s.visible=true; twoTag.s.position.lerpVectors(twoA,twoB,0.5).y+=0.06;
+    var pc=Math.round(k*100);
+    if(pc!==twoTag.v){twoTag.v=pc; var g=twoTag.c.getContext("2d"); g.clearRect(0,0,320,96); rr(g,4,4,312,88,14); g.fillStyle="rgba(11,19,34,0.9)"; g.fill(); g.strokeStyle="#f0b84a"; g.lineWidth=5; g.stroke();
+      g.fillStyle="#f0b84a"; g.font="600 40px "+FS; g.textAlign="center"; g.textBaseline="middle"; g.fillText("Apart "+pc+" %",160,50); twoTag.t.needsUpdate=true}
+  }else{
+    if(TWO)TWO=null;
+    bridge.visible=false; twoTag.s.visible=false;
+  }
+}
 
 function vrView(name){
   var V={rear:[1.9,0,-2.5,0.1,0.5],side:[1.85,0,0.05,0,0],lift:[1.25,-2.05,-1.45,0,0.4],behind:[0,0,-4.1,0,1]}[name];
@@ -1115,12 +1156,13 @@ function vrUpdate(dt){
   /* rays */
   var targets=[CP.mesh,IP.mesh].concat(REG); HOV={};
   CTR.forEach(function(o){
-    o.btn=null; o.part=null;
+    o.btn=null; o.part=null; o.panel=null;
     if(!o.src||!o.c.visible){o.dot.visible=false;return}
     tmpM.identity().extractRotation(o.c.matrixWorld);
     xr.ray.origin.setFromMatrixPosition(o.c.matrixWorld); xr.ray.direction.set(0,0,-1).applyMatrix4(tmpM);
     var h=xr.intersectObjects(targets,false)[0], len=3;
     if(h){len=h.distance; o.dot.visible=true; o.dot.position.copy(h.point);
+      if(h.object===CP.mesh)o.panel=CP; else if(h.object===IP.mesh)o.panel=IP;
       if(h.object===CP.mesh&&h.uv){var px=h.uv.x*CP.w, py=(1-h.uv.y)*CP.h;
         CP.btn.forEach(function(b){if(px>=b.x&&px<=b.x+b.w&&py>=b.y&&py<=b.y+b.h){o.btn=b;HOV[b.id]=1}})}
       else if(h.object.userData.part)o.part=h.object.userData.part;
@@ -1139,6 +1181,7 @@ function vrUpdate(dt){
       if(ay)dolly.position.y=clamp(dolly.position.y-ay*0.9*dt,-2.3,1.2);
     }
   });
+  twoHand();
   var sig=[S.drive,S.load,S.engine,S.park>0,S.fault,S.body,S.explode,S.slow,S.sel,Object.keys(HOV).join()].join("|");
   if(sig!==ctrlSig){ctrlSig=sig;drawCtrl()}
   /* labels at the springs */
@@ -1151,10 +1194,11 @@ function vrStart(session){
   vr.visible=true; ["tag","barL","barR","slow","drag"].forEach(function(id){$(id).style.display="none"});
   if(renderer.xr.setFoveation)renderer.xr.setFoveation(1);
   sun.shadow.mapSize.set(1024,1024); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}
-  vrView("rear"); ctrlSig=""; drawInfo();
+  placePanels(); vrView("rear"); ctrlSig=""; drawInfo();
   session.addEventListener("end",vrEnd);
 }
 function vrEnd(){
+  CTR.forEach(function(o){if(o.hold){vr.attach(o.hold.mesh);o.hold=null}o.sq=false}); TWO=null; bridge.visible=false; twoTag.s.visible=false;
   S.vr=false; vr.visible=false; TAGL.s.visible=TAGR.s.visible=false; CTR.forEach(function(o){o.dot.visible=false});
   dolly.position.set(0,0,0); dolly.rotation.set(0,0,0);
   sun.shadow.mapSize.set(2048,2048); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}
@@ -1179,7 +1223,7 @@ var last=0, first=true;
 function frame(ts){
   var dt=last?Math.min(0.05,(ts-last)/1000):0.016; last=ts; S.t+=dt;
   step(dt);
-  var kt=S.explode?1:0; S.k+=(kt-S.k)*Math.min(1,dt*(reduce?60:5));
+  var kt=S.kt; S.k+=(kt-S.k)*Math.min(1,dt*(reduce?60:5));
   pose();
   if(renderer.xr.isPresenting){vrUpdate(dt); renderer.render(scene,camera)}
   else{controls.update(); renderer.render(scene,camera); placeTag(); placeBar($("barL"),DL,F.pL); placeBar($("barR"),DR,F.pR); readouts(); drawChart()}
