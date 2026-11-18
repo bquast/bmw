@@ -60,6 +60,9 @@ kbd{font-family:var(--mono);font-size:13px;border:1px solid var(--rule);border-r
 .chart .cap i{font-style:normal;font-family:var(--mono);text-transform:none;letter-spacing:0}
 .chart .cap .l{color:var(--air)} .chart .cap .rt{color:var(--signal)}
 .view .vrb{background:var(--air);color:#1a1205;border-color:var(--air);font-weight:600}
+.stage canvas.airin{position:absolute;inset:auto 10px 10px auto;width:260px;height:176px;pointer-events:none;cursor:default}
+@media (max-width:640px){.stage canvas.airin{width:200px;height:135px;bottom:58px}}
+@media (min-width:900px) and (max-height:600px){.stage canvas.airin{width:220px;height:149px}}
 .drag{position:absolute;top:10px;right:12px;font-family:var(--mono);font-size:11px;color:var(--muted);pointer-events:none}
 .status{font-family:var(--mono);font-size:13px;line-height:1.45;padding:10px 14px;border-top:1px solid var(--rule);min-height:58px;color:var(--ink)}
 .status.bad{color:var(--fault)}
@@ -160,6 +163,7 @@ html body #copilot-panel input{background:#0b1322;color:var(--ink);border:1px so
     <div class="tag" id="tag"></div>
     <div class="bar" id="barL"></div><div class="bar" id="barR"></div>
     <div class="slow" id="slow">slow motion</div>
+    <canvas class="airin" id="airInset" aria-label="Diagram of the air in the two springs, the valve block and the pump"></canvas>
     <div class="drag" id="drag">drag to turn · pinch to zoom</div>
     <div class="view">
       <button type="button" id="bExplode" aria-pressed="false">Take apart</button>
@@ -168,6 +172,7 @@ html body #copilot-panel input{background:#0b1322;color:var(--ink);border:1px so
       <button type="button" id="bView">Home view</button>
       <button type="button" id="bVR" class="vrb" hidden>Enter VR</button>
       <button type="button" id="bPilot" hidden aria-pressed="false">Pilot view</button>
+      <button type="button" id="bAir" aria-pressed="true">Air</button>
     </div>
     <div class="loading" id="loading">Filling the springs…</div>
   </div>
@@ -254,6 +259,7 @@ html body #copilot-panel input{background:#0b1322;color:var(--ink);border:1px so
     <li><strong>One wheel:</strong> the spring on the other side changes only a little. The body turns a small quantity around its length axis.</li>
     <li><strong>Speed bump:</strong> the two springs get shorter at the same time. The body goes up and comes down again. The shock absorbers stop this movement after one or two cycles.</li>
   </ul>
+  <p>The <strong>Air</strong> view shows this. Each dot is a quantity of air. When the spring gets shorter, the same dots have less space: they pack closer, move faster and change colour from blue (low pressure) through amber to red (high pressure). When the compressor fills a spring, new dots flow in through the valve. When the control unit releases air, dots flow out through the exhaust. A leak lets dots escape from the side of the bellows.</p>
   <p>Add load and do the test again. The pressure in the springs is higher, and the pressure changes are larger.</p>
 </section>
 
@@ -326,6 +332,7 @@ html body #copilot-panel input{background:#0b1322;color:var(--ink);border:1px so
     <li><kbd>S</kbd> engine on or off</li>
     <li><kbd>0</kbd> to <kbd>5</kbd> select a fault</li>
     <li><kbd>Q</kbd> <kbd>W</kbd> <kbd>R</kbd> <kbd>T</kbd> <kbd>Y</kbd> select the road</li>
+    <li><kbd>A</kbd> show or hide the air</li>
     <li><kbd>C</kbd> copilot: pilot view or free view</li>
     <li><kbd>H</kbd> make the copilot box small</li>
   </ul>
@@ -911,7 +918,7 @@ function poseSide(d,p,flowing,leaking,zw){
   d.cap.position.copy(A); d.cap.quaternion.copy(d.bellows.quaternion);
   var gi=clamp((p-3)/9,0.05,1)*0.75+(flowing?0.25+0.15*Math.sin(S.t*9):0);
   d.bellows.userData.glow.i=gi; d.ring.userData.glow.i=gi;
-  d.mid.lerpVectors(A,be,0.5);
+  d.mid.lerpVectors(A,be,0.5); d.A=A; d.dir=dir; d.blen=A.distanceTo(be);
   var ed=EXD.clone().multiplyScalar(k), dt=P(sd*0.56,0.84,0.16).add(ed), db=new V3(sd*0.61,0.28+zw,0.16).add(ed);
   stretch(d.dRod,dt,db); stretch(d.dTube,lerp(dt,db,0.46),db);
   var en=EXN.clone().multiplyScalar(k);
@@ -940,6 +947,126 @@ var ANCH={
   relay:function(){return relay.getWorldPosition(_v)}, fuse:function(){return fuse.getWorldPosition(_v)}
 };
 
+/* ---------- air view: particles of air inside each spring ---------- */
+/* The number of particles follows the quantity of air in the spring. The spring length sets the space.
+   Thus a shorter spring packs the particles closer: that is the higher pressure. Speed and colour also follow the pressure. */
+var AIR={on:true,dt:0.016};
+var PC=[[2,new T.Color(0x3d7bd9)],[5,new T.Color(0x69cfe6)],[7,new T.Color(0xf0b84a)],[10,new T.Color(0xff6a4d)],[14,new T.Color(0xff2d55)]];
+function presColor(p,out){
+  if(p<=PC[0][0])return out.copy(PC[0][1]);
+  for(var i=0;i<PC.length-1;i++){if(p<=PC[i+1][0])return out.copy(PC[i][1]).lerp(PC[i+1][1],(p-PC[i][0])/(PC[i+1][0]-PC[i][0]))}
+  return out.copy(PC[PC.length-1][1]);
+}
+var AIRN=220;
+function airMake(d){
+  var a={n:95,u:new Float32Array(AIRN),g:new Float32Array(AIRN),r:new Float32Array(AIRN),vu:new Float32Array(AIRN),vg:new Float32Array(AIRN),vr:new Float32Array(AIRN),pp:7,dp:0};
+  for(var i=0;i<AIRN;i++){a.u[i]=Math.random();a.g[i]=Math.random()*6.283;a.r[i]=Math.sqrt(Math.random());a.vu[i]=Math.random()-0.5;a.vg[i]=Math.random()-0.5;a.vr[i]=Math.random()-0.5}
+  var geo=new T.BufferGeometry(); geo.setAttribute("position",new T.BufferAttribute(new Float32Array(AIRN*3),3)); geo.setDrawRange(0,0);
+  a.pts=new T.Points(geo,new T.PointsMaterial({size:0.011,color:0xf0b84a,transparent:true,opacity:0.95,depthWrite:false,sizeAttenuation:true}));
+  a.pts.frustumCulled=false; a.pts.renderOrder=6; scene.add(a.pts);
+  d.air=a;
+}
+airMake(DL); airMake(DR);
+var _e1=new V3(), _e2=new V3(), _ap=new V3();
+function airSide(d,p,m,fill,drain){
+  var a=d.air, dt=AIR.dt*DY.ts;
+  a.pts.visible=AIR.on; d.bellows.material.opacity=AIR.on?0.28:1; d.ring.material.opacity=AIR.on?0.28:1;
+  d.bellows.material.transparent=d.ring.material.transparent=true; d.bellows.material.depthWrite=d.ring.material.depthWrite=!AIR.on;
+  if(!AIR.on||!d.A)return;
+  if(dt>0){a.dp+=((p-a.pp)/dt-a.dp)*Math.min(1,dt*20); a.pp=p}
+  /* quantity of air: particles come in at the port (top) and go out at the port */
+  var want=clamp(Math.round(95*m),0,AIRN);
+  while(a.n<want){var j=a.n++; a.u[j]=0.03; a.vu[j]=0.6+Math.random()*0.4}
+  if(a.n>want)a.n=want;
+  var spd=0.35*Math.sqrt(Math.max(p,0.5)/7)+Math.min(2.5,Math.abs(a.dp)*0.05);
+  var bias=fill?0.9:drain?-0.9:0;
+  var pos=a.pts.geometry.attributes.position.array, dir=d.dir, L=d.blen;
+  _e1.set(0,1,0).cross(dir); if(_e1.lengthSq()<1e-6)_e1.set(1,0,0); _e1.normalize(); _e2.crossVectors(dir,_e1);
+  for(var i=0;i<a.n;i++){
+    a.vu[i]+=((Math.random()-0.5)*6+bias*1.5)*dt; a.vg[i]+=(Math.random()-0.5)*6*dt; a.vr[i]+=(Math.random()-0.5)*6*dt;
+    var vm=Math.hypot(a.vu[i],a.vr[i])+1e-6; if(vm>1){a.vu[i]/=vm;a.vr[i]/=vm}
+    a.u[i]+=a.vu[i]*spd*dt*2.2; a.g[i]+=a.vg[i]*spd*dt*3; a.r[i]+=a.vr[i]*spd*dt*2.2;
+    if(a.u[i]<0.03){a.u[i]=0.03;a.vu[i]=Math.abs(a.vu[i])} if(a.u[i]>0.97){a.u[i]=0.97;a.vu[i]=-Math.abs(a.vu[i])}
+    if(a.r[i]>0.95){a.r[i]=0.95;a.vr[i]=-Math.abs(a.vr[i])} if(a.r[i]<0){a.r[i]=-a.r[i];a.vr[i]=Math.abs(a.vr[i]);a.g[i]+=3.14}
+    var rr=a.r[i]*0.064, c=Math.cos(a.g[i])*rr, s=Math.sin(a.g[i])*rr;
+    _ap.copy(d.A).addScaledVector(dir,a.u[i]*L).addScaledVector(_e1,c).addScaledVector(_e2,s);
+    pos[i*3]=_ap.x; pos[i*3+1]=_ap.y; pos[i*3+2]=_ap.z;
+  }
+  a.pts.geometry.setDrawRange(0,a.n); a.pts.geometry.attributes.position.needsUpdate=true;
+  presColor(p,a.pts.material.color);
+}
+
+/* the 2D cross-section: both springs, the valve block and the compressor */
+var AI={c:$("airInset"),sp:[]};
+for(var si=0;si<2;si++){var q={n:48,x:new Float32Array(120),y:new Float32Array(120),vx:new Float32Array(120),vy:new Float32Array(120)};
+  for(var qi=0;qi<120;qi++){q.x[qi]=Math.random()*2-1;q.y[qi]=Math.random();q.vx[qi]=Math.random()-0.5;q.vy[qi]=Math.random()-0.5} AI.sp.push(q)}
+var _pc=new T.Color();
+function cssCol(p){presColor(p,_pc);return "#"+_pc.getHexString()}
+function drawAir(){
+  var c=AI.c; if(!c)return;
+  var vis=AIR.on&&c.offsetParent!==null; if(!vis)return;
+  var w=c.clientWidth, h=c.clientHeight, dpr=Math.min(window.devicePixelRatio||1,2);
+  if(c.width!==Math.round(w*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+  var g=c.getContext("2d"); g.setTransform(dpr*w/260,0,0,dpr*h/176,0,0); g.clearRect(0,0,260,176);
+  var f=F, dt=AIR.dt*DY.ts, t=S.t;
+  g.fillStyle="rgba(11,19,34,0.86)"; g.strokeStyle="#27364f"; g.lineWidth=1; g.beginPath(); g.roundRect?g.roundRect(0.5,0.5,259,175,8):g.rect(0.5,0.5,259,175); g.fill(); g.stroke();
+  g.font="600 9px "+FS; g.fillStyle="#94a3bd"; g.textBaseline="top"; g.fillText("AIR IN THE SPRINGS",9,7);
+  /* compressor and valve block */
+  var vx=130, vy=40;
+  g.fillStyle=f.comp?"#f0b84a":"#1b263b"; g.strokeStyle="#8394b3"; g.fillRect(vx-22,8,44,14); g.strokeRect(vx-22,8,44,14);
+  g.fillStyle=f.comp?"#1a1205":"#94a3bd"; g.font="500 8px "+FM; g.textAlign="center"; g.fillText("PUMP",vx,11);
+  g.fillStyle="#2c3a55"; g.fillRect(vx-20,vy-6,40,14); g.strokeRect(vx-20,vy-6,40,14);
+  var openL=f.upL||f.dnL, openR=f.upR||f.dnR;
+  [[vx-9,openL],[vx+9,openR]].forEach(function(v){g.beginPath();g.arc(v[0],vy+1,3.5,0,7);g.fillStyle=v[1]?"#f0b84a":"#0b1322";g.fill();g.stroke()});
+  g.strokeStyle="#7d6532"; g.lineWidth=2; g.beginPath(); g.moveTo(vx,22); g.lineTo(vx,vy-6); g.stroke();
+  /* exhaust port */
+  g.beginPath(); g.moveTo(vx+20,vy+1); g.lineTo(vx+30,vy+1); g.stroke();
+  var X=[62,198], top=66;
+  X.forEach(function(x,k){g.beginPath(); g.moveTo(vx+(k?20:-20),vy+4); g.lineTo(x,vy+4); g.lineTo(x,top); g.stroke()});
+  g.lineWidth=1;
+  /* moving air in the lines */
+  function flowDots(path,dir,col){var n=6; g.fillStyle=col; for(var i=0;i<n;i++){var u=((i/n+t*0.7*dir)%1+1)%1, pt=path(u); g.beginPath(); g.arc(pt[0],pt[1],2,0,7); g.fill()}}
+  function linePath(k){var x=X[k], sx=vx+(k?20:-20); var L1=Math.abs(x-sx), L2=top-(vy+4), Lt=L1+L2;
+    return function(u){var s=u*Lt; return s<L1?[sx+(x-sx)*s/L1,vy+4]:[x,vy+4+(s-L1)]}}
+  if(f.comp)flowDots(function(u){return[vx,22+u*(vy-28)]},1,"#ffd27a");
+  if(f.upL)flowDots(linePath(0),1,"#ffd27a"); if(f.dnL)flowDots(linePath(0),-1,"#9fd8ff");
+  if(f.upR)flowDots(linePath(1),1,"#ffd27a"); if(f.dnR)flowDots(linePath(1),-1,"#9fd8ff");
+  if(f.dnL||f.dnR)flowDots(function(u){return[vx+20+u*14,vy+1-u*10]},1,"#9fd8ff");
+  g.textAlign="center"; g.font="500 8px "+FM;
+  if(!f.comp&&!f.dnL&&!f.dnR&&!f.upL&&!f.upR){g.fillStyle="#94a3bd"; g.fillText("valves closed",vx,vy+12)}
+  /* the two springs */
+  [[DL,f.pL,S.mL,"LEFT",f.upL,f.dnL,S.fault==="leakL"],[DR,f.pR,S.mR,"RIGHT",f.upR,f.dnR,S.fault==="leakR"]].forEach(function(a,k){
+    var d=a[0], p=a[1], q=AI.sp[k], x=X[k], col=cssCol(p);
+    var hh=clamp(((d.blen||0.2)-0.1)/0.22,0.15,1)*58+12, bw=58, y0=top+4, y1=y0+hh;
+    g.fillStyle="#8394b3"; g.fillRect(x-34,top,68,4);
+    g.fillStyle="rgba(240,184,74,0.06)"; g.strokeStyle=col; g.lineWidth=1.5;
+    g.beginPath(); g.moveTo(x-bw/2,y0); g.lineTo(x-bw/2,y1-8); g.quadraticCurveTo(x-bw/2,y1,x-bw/2+8,y1); g.lineTo(x+bw/2-8,y1); g.quadraticCurveTo(x+bw/2,y1,x+bw/2,y1-8); g.lineTo(x+bw/2,y0); g.fill(); g.stroke();
+    g.lineWidth=1; g.fillStyle="#3b4558"; g.fillRect(x-14,y1-6,28,150-(y1-6)); g.strokeStyle="#8394b3"; g.strokeRect(x-14,y1-6,28,150-(y1-6));
+    /* particles: count follows the air quantity, the space follows the spring length */
+    var want=clamp(Math.round(48*a[2]),0,120); while(q.n<want){var j=q.n++; q.x[j]=(Math.random()-0.5)*0.3; q.y[j]=0.02; q.vy[j]=0.8} if(q.n>want)q.n=want;
+    var spd=(0.5*Math.sqrt(Math.max(p,0.5)/7)+Math.min(2.5,Math.abs(d.air?d.air.dp:0)*0.05))*dt*1.6, bias=a[4]?1:a[5]?-1:0;
+    g.fillStyle=col;
+    for(var i=0;i<q.n;i++){
+      q.vx[i]+=(Math.random()-0.5)*8*dt; q.vy[i]+=((Math.random()-0.5)*8+bias*2)*dt;
+      var vm=Math.hypot(q.vx[i],q.vy[i])+1e-6; if(vm>1){q.vx[i]/=vm;q.vy[i]/=vm}
+      q.x[i]+=q.vx[i]*spd*2; q.y[i]+=q.vy[i]*spd*1.4;
+      if(q.x[i]<-1){q.x[i]=-1;q.vx[i]=Math.abs(q.vx[i])} if(q.x[i]>1){q.x[i]=1;q.vx[i]=-Math.abs(q.vx[i])}
+      if(q.y[i]<0){q.y[i]=0;q.vy[i]=Math.abs(q.vy[i])} if(q.y[i]>1){q.y[i]=1;q.vy[i]=-Math.abs(q.vy[i])}
+      g.beginPath(); g.arc(x+q.x[i]*(bw/2-5),y0+4+q.y[i]*(hh-14),1.6,0,7); g.fill();
+    }
+    if(a[6]&&a[2]>0.13){g.fillStyle="#ff8a66"; for(var r=0;r<4;r++){var u=((t*0.8+r/4)%1); g.beginPath(); g.arc(x+(k?1:-1)*(bw/2+4+u*16),y0+hh*0.5-u*10,1.8*(1.2-u),0,7); g.fill()}}
+    g.fillStyle=col; g.font="600 11px "+FM; g.fillText(p.toFixed(1)+" bar",x,156);
+    g.fillStyle="#94a3bd"; g.font="500 8px "+FS; g.fillText(a[3],x,168);
+  });
+  /* pressure scale */
+  var gx=112, gw=36; for(var s=0;s<gw;s++){g.fillStyle=cssCol(2+12*s/gw); g.fillRect(gx+s,160,1,5)}
+  g.fillStyle="#94a3bd"; g.font="500 7px "+FM; g.textAlign="left"; g.fillText("2",gx-2,167); g.textAlign="right"; g.fillText("14",gx+gw+3,167);
+  g.textAlign="left";
+}
+function setAir(on){AIR.on=on; $("bAir").setAttribute("aria-pressed",on?"true":"false"); $("airInset").style.display=on?"":"none"}
+$("bAir").addEventListener("click",function(){setAir(!AIR.on)});
+window.addEventListener("keydown",function(e){var t=e.target; if(e.metaKey||e.ctrlKey||e.altKey||(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")))return; if(e.key.toLowerCase()==="a")setAir(!AIR.on)});
+
 function pose(){
   var f=F, k=S.k, hL=DY.L.zb, hR=DY.R.zb;
   car.position.y=(hL+hR)/2; car.rotation.z=Math.atan((hL-hR)/0.96); car.rotation.x=Math.asin(clamp((hL+hR)/2/2.93,-0.2,0.2));
@@ -954,6 +1081,7 @@ function pose(){
   poseSide(DL,f.pL,f.upL||f.dnL,S.fault==="leakL"&&S.mL>0.13,DY.L.zw);
   poseSide(DR,f.pR,f.upR||f.dnR,S.fault==="leakR"&&S.mR>0.13,DY.R.zw);
   poseFront(FL,DY.fL); poseFront(FR,DY.fR);
+  airSide(DL,f.pL,S.mL,f.upL,f.dnL); airSide(DR,f.pR,S.mR,f.upR,f.dnR);
   dots(dotsL,curveL,f.upL,f.dnL); dots(dotsR,curveR,f.upR,f.dnR);
   lineMeshes[0].userData.glow.i=(f.upL||f.dnL)?0.7:0; lineMeshes[1].userData.glow.i=(f.upR||f.dnR)?0.7:0; lineMeshes[2].userData.glow.i=f.comp?0.7:0;
   motor.userData.glow.i=f.comp?0.8+0.2*Math.sin(S.t*30):0;
@@ -1255,12 +1383,12 @@ resize(); homeView(false); setBody(0);
 
 var last=0, first=true;
 function frame(ts){
-  var dt=last?Math.min(0.05,(ts-last)/1000):0.016; last=ts; S.t+=dt;
+  var dt=last?Math.min(0.05,(ts-last)/1000):0.016; last=ts; S.t+=dt; AIR.dt=dt;
   if(CO.on)coFrame(dt); else step(dt);
   var kt=S.kt; S.k+=(kt-S.k)*Math.min(1,dt*(reduce?60:(CO.on?18:5)));
   pose();
   if(renderer.xr.isPresenting){vrUpdate(dt); renderer.render(scene,camera)}
-  else{if(CO.on&&CO.view==="pilot")coCamera(dt); else controls.update(); renderer.render(scene,camera); placeTag(); placeBar($("barL"),DL,F.pL); placeBar($("barR"),DR,F.pR); readouts(); drawChart()}
+  else{if(CO.on&&CO.view==="pilot")coCamera(dt); else controls.update(); renderer.render(scene,camera); placeTag(); placeBar($("barL"),DL,F.pL); placeBar($("barR"),DR,F.pR); readouts(); drawChart(); drawAir()}
   if(first){first=false;$("loading").style.display="none"}
 }
 /* ---------- copilot: a second device (for example the MacBook) sees along and changes the options ---------- */
